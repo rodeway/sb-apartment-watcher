@@ -8,6 +8,25 @@ URL = "https://bartlein.com/rentals.html"
 # Local file to store the hash of the previous state
 HASH_FILE = "bartlein_hash.txt"
 
+def send_discord_alert(message):
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    
+    if not webhook_url:
+        print("No Webhook URL found. Skipping Discord alert.")
+        return
+
+    # Discord expects a JSON payload with a "content" key
+    payload = {
+        "content": message
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload)
+        response.raise_for_status()
+        print("Discord alert fired successfully!")
+    except Exception as e:
+        print(f"Failed to send Discord alert: {e}")
+
 def get_page_content():
     """Fetches the HTML content from the target URL."""
     # Using a standard user agent to avoid basic blocking
@@ -54,10 +73,14 @@ def check_for_updates(current_text):
 
 def trigger_ai_analysis(html_content):
     """Placeholder for the Gemini API call and Webhook alerts."""
-    print("Initiating Gemini API call with the Master Prompt...")
+    print("Update confirmed! Firing Discord alert...")
+    
+    # 🚨 Fire the basic Discord alert immediately
+    send_discord_alert("🚨 **BARTLEIN UPDATE DETECTED!** 🚨\nThe rental page has changed. Check the site immediately: https://bartlein.com/rentals.html")
+    
     # TODO: 1. Send the `html_content` and "Master Prompt" to the Gemini API
     # TODO: 2. Parse the JSON response from Gemini
-    # TODO: 3. Send a POST request to a Slack/Discord Webhook with the results
+    # TODO: 3. Send a detailed, AI-scored summary to Discord
 
 if __name__ == "__main__":
     print(f"Scanning {URL}...")
