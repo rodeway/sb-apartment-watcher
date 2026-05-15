@@ -208,6 +208,12 @@ if __name__ == "__main__":
         
         if has_changed:
             trigger_ai_analysis(pdf_text, diff_message)
+        else:
+            pages_url = os.environ.get("PAGES_URL")
+            no_change_alert = "✅ **Daily Scrape Complete**\nNo changes were detected in the Bartlein PDF today."
+            if pages_url:
+                no_change_alert += f"\nThe live tracker is unchanged: {pages_url}"
+            send_discord_alert(no_change_alert)
             
     except Exception as e:
         print(f"Error during scrape: {e}")
