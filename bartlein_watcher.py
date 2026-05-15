@@ -182,7 +182,18 @@ def trigger_ai_analysis(pdf_text, diff_message):
             with open("update_found.txt", "w") as f:
                 f.write("true")
         else:
-            print("AI analysis complete. No new 1-bedroom units found.")
+            print("AI analysis complete. No new units found matching criteria.")
+            pages_url = os.environ.get("PAGES_URL")
+            no_units_alert = (
+                f"✅ **Bartlein PDF Updated, But No New Units Found**\n\n"
+                f"The AI analyzed the latest PDF but found no new 1 or 2-bedroom units under $3,000.\n"
+            )
+            if pages_url:
+                no_units_alert += f"\n[View the live tracker here]({pages_url})\n"
+            
+            no_units_alert += f"\n[Check the PDF Here]({URL})\n{diff_message}"
+
+            send_discord_alert(no_units_alert)
 
     except Exception as e:
         print(f"Error during Gemini API call: {e}")
