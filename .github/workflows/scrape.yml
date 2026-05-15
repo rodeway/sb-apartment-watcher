@@ -4,37 +4,84 @@ on:
   schedule:
     # Runs at 15:00 UTC every day, which is 8:00 AM PDT (Los Angeles time)
     - cron: '0 15 * * *'
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
-  run-watcher:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
+    # Grant permissions for the workflow to deploy to GitHub Pages
+    permissions:
+      contents: write # Needed to commit the baseline text file
+      pages: write
+      id-token: write
+
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install requests pypdf google-generativeai
 
-      - name: Run Watcher Script
+      - name: Run Scraper Script
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python bartlein_watcher.py
         
-      - name: Commit Hash Update
-        # This step saves the updated hash file back to your repo so tomorrow's run can compare against it
+      - name: Commit Baseline Text Update
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          git add bartlein_hash.txt
-          git commit -m "Update Bartlein hash" || exit 0
+          git add bartlein_previous_text.txt
+          git commit -m "Update Bartlein rental text baseline" || exit 0
           git push
+
+      - name: Check if update was found
+        id: check_update
+        run: |
+          if [ -f "update_found.txt" ]; then
+            echo "update_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "update_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        if: steps.check_update.outputs.update_found == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install React Dependencies & Build
+        if: steps.check_update.outputs.update_found == 'true'
+        run: |
+          npm install
+          npm run build
+
+      - name: Setup GitHub Pages
+        if: steps.check_update.outputs.update_found == 'true'
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        if: steps.check_update.outputs.update_found == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './build' # Assuming 'build' is your React app's build output directory
+
+      - name: Deploy to GitHub Pages & Notify Discord
+        if: steps.check_update.outputs.update_found == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          # This uses a separate action to send the final notification
+          # You will need to add this action to your workflow
+          post_deploy_hook: |
+            curl -X POST -H "Content-Type: application/json" \
+            -d '{"content": "🎯 **New Apartment Found & Deployed!**\nView the updated tracker here: ${{ steps.deployment.outputs.page_url }}"}' \
+            ${{ secrets.WEBHOOK_URL }}
