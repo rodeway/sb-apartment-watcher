@@ -26,6 +26,8 @@ jobs:
           pip install requests beautifulsoup4
 
       - name: Run Watcher Script
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python bartlein_watcher.py
         
       - name: Commit Hash Update
