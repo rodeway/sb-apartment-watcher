@@ -9,9 +9,8 @@ WORKDIR /app
 # This step will only re-run if these files change.
 COPY package*.json ./
 
-# Clean the npm cache to ensure fresh packages are downloaded, then install.
-# This prevents issues with stale package metadata.
-RUN npm cache clean --force && npm install
+# Install all project dependencies
+RUN npm install
 
 # Copy the rest of your application's source code
 COPY . .
