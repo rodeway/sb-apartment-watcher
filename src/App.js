@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud } from 'lucide-react';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // This is your original list of apartments, now serving as the manual/static data source.
 const MANUAL_DATA = [
@@ -73,6 +74,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingApt, setEditingApt] = useState(null);
+  const [archivedApartments, setArchivedApartments] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState('');
+  const [screenshotFile, setScreenshotFile] = useState(null);
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingAptId, setRecordingAptId] = useState(null);
@@ -132,12 +139,23 @@ export default function App() {
     return [...apartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
   }, [apartments, scoring]);
 
+  const sortedArchivedApartments = useMemo(() => {
+    return [...archivedApartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
+  }, [archivedApartments, scoring]);
+
   const handleSave = () => {
+    const newApt = {
+      ...formData,
+      id: editingApt ? editingApt.id : Date.now(),
+      rent: parseInt(formData.rent, 10) || 0, // Ensure rent is a number
+    };
+
     if (editingApt) {
-      setApartments(apartments.map(a => a.id === editingApt.id ? { ...formData, id: editingApt.id } : a));
+      setApartments(apartments.map(a => a.id === editingApt.id ? newApt : a));
     } else {
-      setApartments([...apartments, { ...formData, id: Date.now() }]);
+      setApartments([...apartments, newApt]);
     }
+    setScreenshotFile(null);
     closeForm();
   };
 
@@ -145,6 +163,7 @@ export default function App() {
     setIsFormOpen(false);
     setEditingApt(null);
     setFormData(defaultForm);
+    setScreenshotFile(null);
   };
 
   const openEdit = (apt) => {
@@ -153,7 +172,90 @@ export default function App() {
     setIsFormOpen(true);
   };
 
-  const deleteApt = (id) => setApartments(apartments.filter(a => a.id !== id));
+  const archiveApt = (id) => {
+    const aptToArchive = apartments.find(a => a.id === id);
+    if (aptToArchive) {
+      setApartments(apartments.filter(a => a.id !== id));
+      setArchivedApartments(prev => [...prev, aptToArchive]);
+    }
+  };
+
+  const restoreApt = (id) => {
+    const aptToRestore = archivedApartments.find(a => a.id === id);
+    if (aptToRestore) {
+      setArchivedApartments(archivedApartments.filter(a => a.id !== id));
+      setApartments(prev => [...prev, aptToRestore]);
+    }
+  };
+
+  const permanentlyDeleteApt = (id) => {
+    setArchivedApartments(archivedApartments.filter(a => a.id !== id));
+  };
+
+  // Helper to convert file to base64 for Gemini API
+  const fileToGenerativePart = async (file) => {
+    const base64EncodedData = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+    return {
+      inlineData: { data: base64EncodedData, mimeType: file.type },
+    };
+  };
+
+  const handleParseScreenshot = async () => {
+    if (!screenshotFile) {
+      setParseError('Please select a screenshot file first.');
+      return;
+    }
+    if (!geminiApiKey) {
+      setParseError('Please enter your Gemini API key to parse screenshots.');
+      return;
+    }
+
+    setIsParsing(true);
+    setParseError('');
+
+    try {
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+      const imagePart = await fileToGenerativePart(screenshotFile);
+
+      const prompt = `
+      You are an expert apartment hunting data-entry assistant. Analyze the attached screenshot of a rental listing and extract the information into a JSON object.
+      The user's hard requirement is for 1-bedroom or 2-bedroom units with rent under $3000. If the listing fails these, return an empty object: {}.
+      Infer numeric scores based on the rules provided. Your response MUST be a single, clean JSON object.
+
+      **SCORING RULES:**
+      - neighborhood: Downtown (25), Oak Park (20), San Roque (15), Other (10).
+      - bathroom: Hallway access (25), In-bedroom (0), Unknown (-1).
+      - sqft: 700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0), Unknown (0).
+      - parking: Assigned/Garage (20), Street Only (0).
+      - flooring: Hardwood/Laminate/Tile (10), Carpet (5).
+      - storage: Has dedicated storage (10), None (0).
+      - laundry: In-Unit (10), On-Site (0), Unknown (0).
+      - dishwasher: Yes (5), No (0).
+
+      **JSON STRUCTURE:**
+      {"address": "string", "rent": integer, "notes": "string (brief summary)", "neighborhood": integer, "bathroom": integer, "sqft": integer, "parking": integer, "flooring": integer, "storage": integer, "laundry": integer, "dishwasher": integer}
+      `;
+
+      const result = await model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      const text = response.text().replace(/```json|```/g, '').trim();
+      const parsedData = JSON.parse(text);
+
+      // Update the form with the parsed data, preserving existing fields not returned by the AI
+      setFormData(prev => ({ ...prev, ...parsedData }));
+    } catch (e) {
+      console.error("Error parsing screenshot:", e);
+      setParseError(`Failed to parse screenshot. Check the console for details. Error: ${e.message}`);
+    } finally {
+      setIsParsing(false);
+    }
+  };
 
   const handleMicClick = (apt) => {
     // Voice input logic remains the same
@@ -202,20 +304,121 @@ export default function App() {
       return tags;
   }, [scoring]);
 
+  const apartmentsToDisplay = showArchived ? sortedArchivedApartments : sortedApartments;
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
         <header className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Apartment Tracker</h1>
-            <p className="text-slate-500 font-medium">v9.4 "UI Refresh" Edition</p>
+            <p className="text-slate-500 font-medium">v9.6 "Gemini Vision" Edition</p>
           </div>
-          <button onClick={() => { setFormData(defaultForm); setIsFormOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm">
-            <Plus size={20} /> Add Apartment
-          </button>
+          <div className="flex items-center gap-4">
+            {archivedApartments.length > 0 && (
+              <button onClick={() => setShowArchived(!showArchived)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
+                  {showArchived ? <CheckCircle2 size={16} /> : <Archive size={16} />}
+                  {showArchived ? 'View Active' : `View Archived (${archivedApartments.length})`}
+              </button>
+            )}
+            <button onClick={() => { setFormData(defaultForm); setIsFormOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm">
+              <Plus size={20} /> Add Apartment
+            </button>
+          </div>
         </header>
 
-        {/* Form and other modals remain unchanged */}
+        {isFormOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeForm}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <h2 className="text-xl font-bold p-6 border-b border-slate-200">{editingApt ? 'Edit Apartment' : 'Add New Apartment'}</h2>
+              
+              {/* Gemini Screenshot Parser */}
+              <div className="p-6 border-b border-slate-200 bg-slate-50">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500"/> AI Screenshot Parser</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <label className="text-sm font-medium text-slate-700">Gemini API Key</label>
+                          <input type="password" value={geminiApiKey} onChange={e => setGeminiApiKey(e.target.value)} placeholder="Enter your API key" className="w-full mt-1 p-2 border border-slate-300 rounded-lg shadow-sm" />
+                          <p className="text-xs text-slate-500 mt-1">Your key is stored in-memory and never saved.</p>
+                      </div>
+                      <div>
+                          <label className="text-sm font-medium text-slate-700">Upload Screenshot</label>
+                          <div className="mt-1 flex items-center gap-2">
+                              <label htmlFor="screenshot-upload" className="cursor-pointer w-full bg-white p-2 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 hover:bg-slate-50">
+                                  <UploadCloud size={16} className="text-slate-500"/>
+                                  <span className="text-sm text-slate-600 truncate">{screenshotFile ? screenshotFile.name : 'Select an image...'}</span>
+                              </label>
+                              <input id="screenshot-upload" type="file" className="hidden" accept="image/*" onChange={e => setScreenshotFile(e.target.files[0])} />
+                          </div>
+                      </div>
+                  </div>
+                  <button onClick={handleParseScreenshot} disabled={isParsing || !screenshotFile || !geminiApiKey} className="mt-4 w-full bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed">
+                      {isParsing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                      {isParsing ? 'Analyzing...' : 'Parse with AI'}
+                  </button>
+                  {parseError && <p className="text-sm text-red-600 mt-2">{parseError}</p>}
+              </div>
+
+              <div className="p-6 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                  {/* Form Fields */}
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">Address</label>
+                    <input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">Manager</label>
+                    <input value={formData.manager} onChange={e => setFormData({...formData, manager: e.target.value})} className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">Rent</label>
+                    <input type="number" value={formData.rent} onChange={e => setFormData({...formData, rent: e.target.value})} className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+
+                  {Object.entries(INITIAL_SCORING).map(([key, options]) => (
+                    <div key={key}>
+                      <label className="text-sm font-medium text-slate-700 capitalize">{key}</label>
+                      <select value={formData[key]} onChange={e => setFormData({...formData, [key]: parseInt(e.target.value)})} className="w-full mt-1 p-2 border border-slate-300 rounded-lg bg-white">
+                        {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    </div>
+                  ))}
+
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">Notes</label>
+                    <textarea value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} rows="3" className="w-full mt-1 p-2 border border-slate-300 rounded-lg"></textarea>
+                  </div>
+
+                  <div className="md:col-span-2">
+                      <h4 className="text-md font-semibold text-slate-800 mb-2 border-t pt-4 mt-2">Commute Times</h4>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">Drive to Hospital</label>
+                    <input value={formData.driveHospital} onChange={e => setFormData({...formData, driveHospital: e.target.value})} placeholder="e.g., 6 min" className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+                   <div>
+                    <label className="text-sm font-medium text-slate-700">Bike to East Beach</label>
+                    <input value={formData.bikeEastBeach} onChange={e => setFormData({...formData, bikeEastBeach: e.target.value})} placeholder="e.g., 22 min" className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+                   <div>
+                    <label className="text-sm font-medium text-slate-700">Bike to Arroyo Burro</label>
+                    <input value={formData.bikeArroyoBurro} onChange={e => setFormData({...formData, bikeArroyoBurro: e.target.value})} placeholder="e.g., 16 min" className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+                   <div>
+                    <label className="text-sm font-medium text-slate-700">Bike to Amtrak</label>
+                    <input value={formData.bikeAmtrak} onChange={e => setFormData({...formData, bikeAmtrak: e.target.value})} placeholder="e.g., 15 min" className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                  </div>
+
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-4 mt-auto">
+                <button onClick={closeForm} className="text-sm font-medium text-slate-700 py-2 px-4 rounded-lg hover:bg-slate-200">Cancel</button>
+                <button onClick={handleSave} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-indigo-700">Save Apartment</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center text-center p-20 bg-white rounded-2xl shadow-sm">
@@ -223,8 +426,12 @@ export default function App() {
             <p className="mt-4 font-medium text-slate-600">Checking for new listings from today's scrape...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {sortedApartments.map((apt, index) => (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-700">{showArchived ? 'Archived Listings' : 'Active Listings'}</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {apartmentsToDisplay.map((apt, index) => (
               <div key={apt.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'}`}>
                 
                 {/* Card Header */}
@@ -284,20 +491,41 @@ export default function App() {
                 <div className="p-2 bg-slate-50 border-t border-slate-200 mt-auto">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-1">
-                            <a href={getMapsUrl(apt.address, 'hospital')} title={`Drive to Cottage Hospital (${apt.driveHospital || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors"> <Car size={16} /> </a>
-                            <a href={getMapsUrl(apt.address, 'eastbeach')} title={`Bike to East Beach (${apt.bikeEastBeach || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors"> <Bike size={16} /> </a>
-                            <a href={getMapsUrl(apt.address, 'amtrak')} title={`Bike to Amtrak (${apt.bikeAmtrak || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors"> <Bike size={16} /> </a>
+                            <a href={getMapsUrl(apt.address, 'hospital')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors w-20">
+                                <Car size={16} />
+                                <span className="text-xs font-medium mt-1 text-center leading-tight">Cottage<br/>{apt.driveHospital || 'TBD'}</span>
+                            </a>
+                            <a href={getMapsUrl(apt.address, 'eastbeach')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors w-20">
+                                <Bike size={16} />
+                                <span className="text-xs font-medium mt-1 text-center leading-tight">East Beach<br/>{apt.bikeEastBeach || 'TBD'}</span>
+                            </a>
+                            <a href={getMapsUrl(apt.address, 'arroyo')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-teal-100 hover:text-teal-700 rounded-md transition-colors w-20">
+                                <Bike size={16} />
+                                <span className="text-xs font-medium mt-1 text-center leading-tight">Arroyo Burro<br/>{apt.bikeArroyoBurro || 'TBD'}</span>
+                            </a>
+                            <a href={getMapsUrl(apt.address, 'amtrak')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors w-20">
+                                <Bike size={16} />
+                                <span className="text-xs font-medium mt-1 text-center leading-tight">Amtrak<br/>{apt.bikeAmtrak || 'TBD'}</span>
+                            </a>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => openEdit(apt)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button>
-                            <button onClick={() => deleteApt(apt.id)} className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button>
-                        </div>
+                        {showArchived ? (
+                            <div className="flex gap-2">
+                                <button onClick={() => restoreApt(apt.id)} title="Restore" className="p-2 text-slate-500 hover:text-green-600 hover:bg-slate-200/60 rounded-md transition-colors"><ArchiveRestore size={16} /></button>
+                                <button onClick={() => permanentlyDeleteApt(apt.id)} title="Delete Permanently" className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button>
+                            </div>
+                        ) : (
+                            <div className="flex gap-2">
+                                <button onClick={() => openEdit(apt)} title="Edit" className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button>
+                                <button onClick={() => archiveApt(apt.id)} title="Archive" className="p-2 text-slate-500 hover:text-amber-600 hover:bg-slate-200/60 rounded-md transition-colors"><Archive size={16} /></button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
