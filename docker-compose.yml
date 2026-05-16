@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  app:
+    # Build the image from the Dockerfile in the current directory
+    build: .
+    # Name the container for easier management
+    container_name: sb-apartment-watcher-dev
+    ports:
+      # Map port 3000 on your Windows machine to port 3000 inside the container
+      - "3000:3000"
+    volumes:
+      # Mount the entire project directory to the container's working directory.
+      - .:/app
+      # Use a named volume for node_modules to prevent the host's (empty)
+      # node_modules from overwriting the one installed in the container.
+      # This is the key to making live-reloading work with a full directory mount.
+      - /app/node_modules
