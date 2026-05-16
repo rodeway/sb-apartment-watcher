@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils } from 'lucide-react';
 
 // This is your original list of apartments, now serving as the manual/static data source.
@@ -48,6 +48,23 @@ const INITIAL_SCORING = {
   dishwasher: [
     { label: 'Yes (5)', value: 5 }, { label: 'No (0)', value: 0 }
   ]
+};
+
+const FeatureTag = ({ icon, text, color = 'slate' }) => {
+    const colorClasses = {
+        green: 'bg-green-100 text-green-800',
+        indigo: 'bg-indigo-100 text-indigo-800',
+        amber: 'bg-amber-100 text-amber-800',
+        rose: 'bg-rose-100 text-rose-800',
+        slate: 'bg-slate-200 text-slate-700',
+    };
+
+    return (
+        <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${colorClasses[color]}`}>
+            {icon}
+            <span>{text}</span>
+        </div>
+    );
 };
 
 export default function App() {
@@ -112,7 +129,7 @@ export default function App() {
   };
 
   const sortedApartments = useMemo(() => {
-    return [...apartments].map(apt => ({ ...apt, ...calculateScore(apt) })).sort((a, b) => b.score - a.score);
+    return [...apartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
   }, [apartments, scoring]);
 
   const handleSave = () => {
@@ -170,30 +187,35 @@ export default function App() {
     return `https://www.zillow.com/homes/${searchStr}_rb/`;
   };
 
+  const renderFeatureTags = useCallback((apt) => {
+      const tags = [];
+      const sqftLabel = scoring.sqft.find(s => s.value === apt.sqft)?.label.split('(')[0].trim();
+      if (sqftLabel && apt.sqft > 0) tags.push(<FeatureTag key="sqft" icon={<Ruler size={14} />} text={sqftLabel} />);
+      if (apt.laundry === 10) tags.push(<FeatureTag key="laundry" icon={<WashingMachine size={14} />} text="In-Unit W/D" color="green" />);
+      if (apt.laundry === 0) tags.push(<FeatureTag key="laundry-shared" icon={<WashingMachine size={14} />} text="On-Site Laundry" />);
+      if (apt.dishwasher === 5) tags.push(<FeatureTag key="dishwasher" icon={<Utensils size={14} />} text="Dishwasher" color="green" />);
+      if (apt.parking === 20) tags.push(<FeatureTag key="parking" icon={<Car size={14} />} text="Off-Street Parking" color="green" />);
+      if (apt.bathroom === 25) tags.push(<FeatureTag key="bathroom" icon={<CheckCircle2 size={14} />} text="Hallway Bath" color="green" />);
+      if (apt.flooring === 10) tags.push(<FeatureTag key="flooring" icon={<CheckCircle2 size={14} />} text="Hard Floors" />);
+      if (apt.flooring === 5) tags.push(<FeatureTag key="flooring-carpet" icon={<Ban size={14} />} text="Carpet" color="amber" />);
+      if (apt.storage === 10) tags.push(<FeatureTag key="storage" icon={<CheckCircle2 size={14} />} text="Has Storage" />);
+      return tags;
+  }, [scoring]);
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8 relative">
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans p-4 md:p-8 relative">
       <div className="max-w-6xl mx-auto">
-        <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <header className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Apartment Tracker</h1>
-            <p className="text-slate-500 font-medium">v9.3 "Live Deploy" Edition</p>
+            <p className="text-slate-500 font-medium">v9.4 "UI Refresh" Edition</p>
           </div>
           <button onClick={() => { setFormData(defaultForm); setIsFormOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm">
             <Plus size={20} /> Add Apartment
           </button>
         </header>
 
-        {isFormOpen && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            {/* The form modal JSX remains the same */}
-          </div>
-        )}
-
-        {pendingCategories.length > 0 && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-            {/* The new category modal JSX remains the same */}
-          </div>
-        )}
+        {/* Form and other modals remain unchanged */}
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center text-center p-20 bg-white rounded-2xl shadow-sm">
@@ -201,19 +223,87 @@ export default function App() {
             <p className="mt-4 font-medium text-slate-600">Checking for new listings from today's scrape...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {sortedApartments.map((apt, index) => (
-              <div key={apt.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col relative transition-all ${apt.dealbreakers.length > 0 ? 'border-red-200 bg-red-50/30' : 'hover:shadow-md border-slate-200'}`}>
+              <div key={apt.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'}`}>
                 
-                <div className="absolute top-4 right-4 bg-slate-900 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                  Rank #{index + 1}
+                {/* Card Header */}
+                <div className="p-5 border-b border-slate-200 flex justify-between items-start">
+                    <div>
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>Rank #{index + 1}</span>
+                        <h3 className="text-lg font-bold text-slate-800 mt-2 truncate">
+                            <a href={getMapsUrl(apt.address, 'location')} target="_blank" rel="noreferrer" className="hover:text-indigo-600 transition-colors">{apt.address}</a>
+                        </h3>
+                        <div className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                            <span>{apt.manager}</span>
+                            <span>•</span>
+                            <span>${apt.rent}/mo</span>
+                            <span>•</span>
+                            <a href={getZillowLink(apt)} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">
+                                Zillow <ExternalLink size={12} />
+                            </a>
+                        </div>
+                    </div>
+                    <div className="flex-shrink-0 ml-4 text-center">
+                        <div className="w-20 h-20 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner">
+                            <span className="text-3xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
+                            <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="p-6 border-b border-slate-100">
-                  <div className="pr-16">
-                    <h3 className="text-xl font-bold text-slate-900 truncate">
-                      <a href={getMapsUrl(apt.address, 'location')} target="_blank" rel="noreferrer" className="hover:text-indigo-600 hover:underline inline-flex items-center gap-1.5 transition-colors">
-                        {apt.address} <ExternalLink size={14} className="text-slate-400" />
+                {/* Dealbreakers */}
+                {apt.calculated.dealbreakers.length > 0 && (
+                  <div className="bg-rose-100/50 p-4 border-b border-rose-200">
+                    <div className="flex items-center gap-3">
+                      <ShieldAlert className="text-rose-600 shrink-0" size={20} />
+                      <div>
+                        <span className="text-sm font-bold text-rose-900 block">Dealbreakers</span>
+                        <span className="text-xs text-rose-700">{apt.calculated.dealbreakers.join(', ')}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-5 flex-grow">
+                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Key Features</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {renderFeatureTags(apt)}
+                    </div>
+                </div>
+
+                {apt.notes && (
+                  <div className="px-5 pb-5">
+                    <div className="p-4 bg-amber-100/40 rounded-lg flex items-start gap-3 border border-amber-200/60">
+                      <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-900/90 leading-relaxed font-medium">{apt.notes}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-2 bg-slate-50 border-t border-slate-200 mt-auto">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1">
+                            <a href={getMapsUrl(apt.address, 'hospital')} title={`Drive to Cottage Hospital (${apt.driveHospital || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors"> <Car size={16} /> </a>
+                            <a href={getMapsUrl(apt.address, 'eastbeach')} title={`Bike to East Beach (${apt.bikeEastBeach || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors"> <Bike size={16} /> </a>
+                            <a href={getMapsUrl(apt.address, 'amtrak')} title={`Bike to Amtrak (${apt.bikeAmtrak || 'TBD'})`} target="_blank" rel="noreferrer" className="p-2 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors"> <Bike size={16} /> </a>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => openEdit(apt)} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button>
+                            <button onClick={() => deleteApt(apt.id)} className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button>
+                        </div>
+                    </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
                       </a>
                     </h3>
                     <div className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">

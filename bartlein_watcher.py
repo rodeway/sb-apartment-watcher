@@ -119,7 +119,7 @@ def trigger_ai_analysis(pdf_text, diff_message):
         
         # Configure the model to expect a JSON response
         generation_config = genai.GenerationConfig(response_mime_type="application/json")
-        model = genai.GenerativeModel('gemini-1.5-flash', generation_config=generation_config)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest', generation_config=generation_config)
 
         prompt = f"""
         You are an expert apartment hunting data-entry assistant for Rob and Selin in Santa Barbara.
