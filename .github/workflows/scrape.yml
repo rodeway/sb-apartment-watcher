@@ -54,13 +54,11 @@ jobs:
           fi
 
       - name: Setup Node.js
-        if: steps.check_update.outputs.update_found == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
       - name: Cache Node.js modules
-        if: steps.check_update.outputs.update_found == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.npm
@@ -69,27 +67,23 @@ jobs:
             ${{ runner.os }}-node-
 
       - name: Install React Dependencies & Build
-        if: steps.check_update.outputs.update_found == 'true'
         run: |
           npm install
           npm run build
 
       - name: Setup GitHub Pages
-        if: steps.check_update.outputs.update_found == 'true'
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
-        if: steps.check_update.outputs.update_found == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: './build' # Assuming 'build' is your React app's build output directory
 
       - name: Deploy to GitHub Pages & Notify Discord
-        if: steps.check_update.outputs.update_found == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
         with:
           post_deploy_hook: |
             curl -X POST -H "Content-Type: application/json" \
-            -d '{"content": "🎯 **New Apartment Found & Deployed!**\nView the updated tracker here: ${{ steps.deployment.outputs.page_url }}"}' \
+            -d '{"content": "🚀 **Initial Deployment Complete!**\nView the live tracker here: ${{ steps.deployment.outputs.page_url }}"}' \
             ${{ secrets.WEBHOOK_URL }}
