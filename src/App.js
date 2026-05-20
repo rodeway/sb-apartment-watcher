@@ -97,6 +97,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingApt, setEditingApt] = useState(null);
+  const [addToDaily, setAddToDaily] = useState(true);
+  const [scrapeTriggerTime, setScrapeTriggerTime] = useState(null);
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [isTriggeringScrape, setIsTriggeringScrape] = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState('');
@@ -178,6 +180,47 @@ export default function App() {
 
     fetchNewApartments();
   }, []); // The empty dependency array ensures this runs only once.
+
+  // Effect for polling scrape results
+  useEffect(() => {
+    if (!scrapeTriggerTime) return;
+
+    const pollInterval = 7000; // 7 seconds
+    const maxDuration = 5 * 60 * 1000; // 5 minutes
+
+    const intervalId = setInterval(async () => {
+      try {
+        // Add a cache-busting query param to ensure we get the latest file
+        const response = await fetch(`/scrape_result.json?t=${Date.now()}`);
+        if (response.ok) {
+          const result = await response.json();
+          const resultTime = new Date(result.timestamp).getTime();
+          
+          if (resultTime > scrapeTriggerTime) {
+            clearInterval(intervalId);
+            setScrapeTriggerTime(null); // Stop polling
+            
+            if (result.added_units && result.added_units.length > 0) {
+              const addresses = result.added_units.map(u => u.address).join('; ');
+              setScrapeStatus(`✅ Scrape complete! Added ${result.added_units.length} unit(s): ${addresses}. Refreshing data...`);
+              setTimeout(() => window.location.reload(), 4000); // Reload to show new data
+            } else {
+              setScrapeStatus('✅ Scrape complete! No new units were found.');
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Polling for scrape result failed:", error);
+      }
+    }, pollInterval);
+
+    const timeoutId = setTimeout(() => {
+      clearInterval(intervalId);
+      if (scrapeTriggerTime) setScrapeStatus(prev => prev.includes('Success') ? 'Polling timed out. The scrape may be taking longer than usual. Check GitHub Actions for status.' : prev);
+    }, maxDuration);
+
+    return () => { clearInterval(intervalId); clearTimeout(timeoutId); };
+  }, [scrapeTriggerTime]);
 
   const defaultForm = {
     address: '', manager: '', listingUrl: '', zillowUrl: '', rent: '', notes: '',
@@ -357,12 +400,13 @@ export default function App() {
   const handleTriggerScrape = async () => {
     setIsTriggeringScrape(true);
     setScrapeStatus('Triggering workflow...');
+    const triggerTime = Date.now();
 
     try {
       const response = await fetch('/api/trigger-scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scrape_url: scrapeUrl }),
+        body: JSON.stringify({ scrape_url: scrapeUrl, addToDaily: addToDaily }),
       });
 
       const result = await response.json();
@@ -372,6 +416,8 @@ export default function App() {
         throw new Error(result.message || `Server responded with ${response.status}`);
       }
       setScrapeStatus(`✅ Success! ${result.message}`);
+      setScrapeStatus(`✅ Success! ${result.message} Now waiting for results...`);
+      setScrapeTriggerTime(triggerTime);
     } catch (error) {
       console.error('Failed to trigger scrape:', error);
       setScrapeStatus(`❌ Error: Could not trigger workflow. ${error.message}`);
@@ -476,6 +522,16 @@ export default function App() {
                     <div className="p-6">
                         <label htmlFor="scrape-url-input" className="text-sm font-medium text-slate-700">URL to Scrape</label>
                         <input id="scrape-url-input" type="text" value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://..." className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                        <div className="mt-4 flex items-center">
+                            <input
+                                id="add-to-daily-checkbox"
+                                type="checkbox"
+                                checked={addToDaily}
+                                onChange={e => setAddToDaily(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <label htmlFor="add-to-daily-checkbox" className="ml-3 block text-sm text-slate-700">Add this URL to the daily scheduled scrape</label>
+                        </div>
                         {scrapeStatus && (
                             <div className={`mt-4 p-3 rounded-lg text-sm ${scrapeStatus.includes('Error') ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'}`}>
                                 {scrapeStatus}

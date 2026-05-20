@@ -10,8 +10,8 @@ import google.generativeai as genai
 # The default URL to scrape. This can be overridden by the SCRAPE_URL environment variable.
 DEFAULT_URL = "https://www.bartlein.com/wp-content/uploads/2021/07/SBList.pdf"
 
-# The baseline text file that gets committed to the repo
-PREVIOUS_TEXT_FILE = "bartlein_previous_text.txt"
+# The file containing URLs for the daily scheduled scrape.
+DAILY_URLS_FILE = "daily_scrape_urls.txt"
 
 # Scoring rules for the AI to follow, based on the v9.0 Scorecard
 SCORING_RULES = {
@@ -118,12 +118,19 @@ def get_text_from_url(url):
         print(f"Warning: Unhandled content type '{content_type}'. Attempting to parse as plain text.")
         return response.text
 
+def get_baseline_filename(url):
+    """Creates a unique, safe filename for a URL's baseline text using a hash."""
+    return f"baseline_{hash(url)}.txt"
+
 def check_for_updates_and_diff(current_text, url):
     """Compares current text to previous text and finds added/removed lines."""
-    if os.path.exists(PREVIOUS_TEXT_FILE):
-        with open(PREVIOUS_TEXT_FILE, 'r', encoding='utf-8') as f:
+    baseline_file = get_baseline_filename(url)
+
+    if os.path.exists(baseline_file):
+        with open(baseline_file, 'r', encoding='utf-8') as f:
             old_text = f.read()
     else:
+        print(f"No baseline file found at '{baseline_file}'. Creating a new one.")
         old_text = ""
 
     if current_text != old_text:
@@ -151,12 +158,12 @@ def check_for_updates_and_diff(current_text, url):
             diff_message = "\n*First run complete. Baseline established for tomorrow.*"
 
         # Save the new text to become the baseline for tomorrow
-        with open(PREVIOUS_TEXT_FILE, 'w', encoding='utf-8') as f:
+        with open(baseline_file, 'w', encoding='utf-8') as f:
             f.write(current_text)
             
         return True, diff_message
     
-    print("✅ No changes detected in the PDF today.")
+    print("✅ No changes detected for this URL.")
     return False, ""
 
 def trigger_ai_analysis(pdf_text, diff_message, url):
@@ -234,6 +241,16 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
         found_units = json.loads(response.text)
         maps_api_key = os.environ.get("MAPS_API_KEY")
 
+        # Create a result summary file for the UI to poll.
+        # This is created immediately after the AI response, before other processing.
+        os.makedirs("public", exist_ok=True)
+        scrape_result = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "added_units": [{"address": unit.get("address", "Unknown Address")} for unit in found_units]
+        }
+        with open("public/scrape_result.json", "w", encoding="utf-8") as f:
+            json.dump(scrape_result, f, indent=2)
+
         if found_units:
             print(f"AI found {len(found_units)} new unit(s).")
 
@@ -256,6 +273,12 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
                 f.write("true")
         else:
             print("AI analysis complete. No new units found matching criteria.")
+            # Write an empty apartments.json to clear the list from the previous day
+            with open("public/apartments.json", "w", encoding="utf-8") as f:
+                json.dump([], f)
+            # Create a signal file for the GitHub Actions workflow to deploy the empty list
+            with open("update_found.txt", "w") as f:
+                f.write("true")
             pages_url = os.environ.get("PAGES_URL")
             no_units_alert = (
                 f"✅ **Bartlein PDF Updated, But No New Units Found**\n\n"
@@ -274,19 +297,37 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
         send_discord_alert(error_alert)
 
 if __name__ == "__main__":
-    scrape_url = os.environ.get("SCRAPE_URL", DEFAULT_URL)
-    try:
-        content_text = get_text_from_url(scrape_url)
-        has_changed, diff_message = check_for_updates_and_diff(content_text, scrape_url)
-        
-        if has_changed:
-            trigger_ai_analysis(content_text, diff_message, scrape_url)
-        else:
-            pages_url = os.environ.get("PAGES_URL")
-            no_change_alert = "✅ **Daily Scrape Complete**\nNo changes were detected in the Bartlein PDF today."
-            if pages_url:
-                no_change_alert += f"\nThe live tracker is unchanged: {pages_url}"
-            send_discord_alert(no_change_alert)
-            
-    except Exception as e:
-        print(f"Error during scrape: {e}")
+    on_demand_url = os.environ.get("SCRAPE_URL")
+    is_on_demand = bool(on_demand_url and on_demand_url != DEFAULT_URL)
+
+    urls_to_scrape = []
+    if is_on_demand:
+        urls_to_scrape.append(on_demand_url)
+        print(f"🚀 Performing on-demand scrape for: {on_demand_url}")
+    else:
+        print("⏰ Performing daily scheduled scrape...")
+        if os.path.exists(DAILY_URLS_FILE):
+            with open(DAILY_URLS_FILE, 'r', encoding='utf-8') as f:
+                urls_to_scrape = [line.strip() for line in f if line.strip()]
+        if not urls_to_scrape:
+            urls_to_scrape.append(DEFAULT_URL) # Fallback to default
+        print(f"Found {len(urls_to_scrape)} URL(s) for daily scrape.")
+
+    any_updates_found_today = False
+    for url in urls_to_scrape:
+        print(f"\n--- Processing URL: {url} ---")
+        try:
+            content_text = get_text_from_url(url)
+            has_changed, diff_message = check_for_updates_and_diff(content_text, url)
+            if has_changed:
+                any_updates_found_today = True
+                trigger_ai_analysis(content_text, diff_message, url)
+        except Exception as e:
+            print(f"Error during scrape for {url}: {e}")
+
+    if not is_on_demand and not any_updates_found_today:
+        pages_url = os.environ.get("PAGES_URL")
+        no_change_alert = "✅ **Daily Scrape Complete**\nNo changes were detected across all monitored URLs today."
+        if pages_url:
+            no_change_alert += f"\nThe live tracker is unchanged: {pages_url}"
+        send_discord_alert(no_change_alert)

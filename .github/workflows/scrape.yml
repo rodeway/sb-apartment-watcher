@@ -43,13 +43,19 @@ jobs:
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python bartlein_watcher.py
         
-      - name: Commit Baseline Text Update
+      - name: Commit Baseline & URL List Updates
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          git add bartlein_previous_text.txt
-          git commit -m "Update Bartlein rental text baseline" || exit 0
-          git push
+          # Add all baseline files and the URL list
+          git add baseline_*.txt daily_scrape_urls.txt || true
+          # Check if there are any changes to commit
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update scraper baselines and URL list"
+            git push
+          else
+            echo "No baseline or URL list changes to commit."
+          fi
 
       - name: Check if update was found
         id: check_update
