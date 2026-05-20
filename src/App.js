@@ -365,10 +365,13 @@ export default function App() {
         body: JSON.stringify({ scrape_url: scrapeUrl }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(`Server responded with ${response.status}`);
+        // Use the message from the server's JSON response if available
+        throw new Error(result.message || `Server responded with ${response.status}`);
       }
-      setScrapeStatus('✅ Success! Workflow triggered. Check the Actions tab in your GitHub repo for progress.');
+      setScrapeStatus(`✅ Success! ${result.message}`);
     } catch (error) {
       console.error('Failed to trigger scrape:', error);
       setScrapeStatus(`❌ Error: Could not trigger workflow. ${error.message}`);
