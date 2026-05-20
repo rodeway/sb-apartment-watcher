@@ -109,6 +109,8 @@ export default async function handler(request, response) {
     return response.status(202).json({ message: 'Workflow triggered successfully!' });
   } catch (error) {
     console.error('Error triggering GitHub workflow:', error);
-    return response.status(500).json({ message: 'Failed to trigger workflow', error: error.message });
+    const detail = error.cause ? ` (Cause: ${error.cause})` : '';
+    const errorMessage = `Failed to trigger workflow. ${error.message}${detail}`;
+    return response.status(500).json({ message: errorMessage, error: error.message });
   }
 }
