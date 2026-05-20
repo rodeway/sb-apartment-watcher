@@ -15,19 +15,19 @@ export default async function handler(request, response) {
 
   // These values should be configured in your Vercel project's Environment Variables
   const GITHUB_TOKEN = process.env.GITHUB_PAT;
-  const GITHUB_REPO_OWNER = process.env.VERCEL_GIT_REPO_OWNER;
-  const GITHUB_REPO_NAME = process.env.VERCEL_GIT_REPO_SLUG;
+  const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER;
+  const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME;
   const WORKFLOW_FILE_NAME = 'scrape.yml'; // The name of your workflow file
 
   // Add logging to debug environment variables
   console.log('--- Trigger Scrape Function ---');
-  console.log('VERCEL_GIT_REPO_OWNER:', GITHUB_REPO_OWNER);
-  console.log('VERCEL_GIT_REPO_SLUG:', GITHUB_REPO_NAME);
+  console.log('GITHUB_REPO_OWNER:', GITHUB_REPO_OWNER);
+  console.log('GITHUB_REPO_NAME:', GITHUB_REPO_NAME);
   console.log('GITHUB_PAT is set:', !!GITHUB_TOKEN);
   console.log('-----------------------------');
 
   if (!GITHUB_TOKEN || !GITHUB_REPO_OWNER || !GITHUB_REPO_NAME) {
-    const errorMessage = 'Server configuration error: Missing required environment variables (GITHUB_PAT, VERCEL_GIT_REPO_OWNER, VERCEL_GIT_REPO_SLUG). Ensure the project is linked to GitHub and GITHUB_PAT is set in Vercel.';
+    const errorMessage = 'Server configuration error: Missing required environment variables (GITHUB_PAT, GITHUB_REPO_OWNER, GITHUB_REPO_NAME). Please set these in your Vercel project settings.';
     console.error(errorMessage);
     return response.status(500).json({ message: errorMessage });
   }
@@ -51,7 +51,6 @@ export default async function handler(request, response) {
     });
 
     if (!dispatchResponse.ok) {
-      throw new Error(`GitHub API responded with ${dispatchResponse.status}`);
       const errorBody = await dispatchResponse.text();
       console.error(`GitHub API Error: ${dispatchResponse.status}`, errorBody);
       throw new Error(`GitHub API responded with ${dispatchResponse.status}. Check function logs on Vercel for details.`);
