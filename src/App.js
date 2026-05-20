@@ -440,7 +440,7 @@ export default function App() {
         <header className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Apartment Tracker</h1>
-            <p className="text-slate-500 font-medium">v9.6 "Gemini Vision" Edition</p>
+            <p className="text-slate-500 font-medium">v9.7 "Vercel Sync" Edition</p>
           </div>
           <div className="flex items-center gap-4">
             {archivedApartments.length > 0 && (

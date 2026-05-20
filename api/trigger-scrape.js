@@ -20,7 +20,7 @@ export default async function handler(request, response) {
   const WORKFLOW_FILE_NAME = 'scrape.yml'; // The name of your workflow file
 
   // Add logging to debug environment variables
-  console.log('--- Trigger Scrape Function ---');
+  console.log('--- Trigger Scrape Function v2 ---');
   console.log('GITHUB_REPO_OWNER:', GITHUB_REPO_OWNER);
   console.log('GITHUB_REPO_NAME:', GITHUB_REPO_NAME);
   console.log('GITHUB_PAT is set:', !!GITHUB_TOKEN);
