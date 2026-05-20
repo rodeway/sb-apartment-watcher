@@ -44,14 +44,15 @@ jobs:
         run: python bartlein_watcher.py
         
       - name: Commit Baseline & URL List Updates
+      - name: Commit Results, Baselines & URL List Updates
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          # Add all baseline files and the URL list
-          git add baseline_*.txt daily_scrape_urls.txt || true
+          # Add all generated files that should be persisted
+          git add public/apartments.json public/scrape_result.json baseline_*.txt daily_scrape_urls.txt || true
           # Check if there are any changes to commit
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Update scraper baselines and URL list"
+            git commit -m "Update scraper results, baselines, and URL list"
             git push
           else
             echo "No baseline or URL list changes to commit."

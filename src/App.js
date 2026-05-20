@@ -415,7 +415,6 @@ export default function App() {
         // Use the message from the server's JSON response if available
         throw new Error(result.message || `Server responded with ${response.status}`);
       }
-      setScrapeStatus(`✅ Success! ${result.message}`);
       setScrapeStatus(`✅ Success! ${result.message} Now waiting for results...`);
       setScrapeTriggerTime(triggerTime);
     } catch (error) {
