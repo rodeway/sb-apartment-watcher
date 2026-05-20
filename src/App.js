@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // This is your original list of apartments, now serving as the manual/static data source.
@@ -18,36 +18,42 @@ const MANUAL_DATA = [
 const INITIAL_SCORING = {
   neighborhood: [
     { label: 'Downtown (25)', value: 25 }, { label: 'Oak Park (20)', value: 20 },
-    { label: 'San Roque (15)', value: 15 }, { label: 'Other (10)', value: 10 }
+    { label: 'San Roque (15)', value: 15 }, { label: 'Other (10)', value: 10 },
+    { label: 'TBD', value: -1 }
   ],
   bathroom: [
-    { label: 'Hallway / Separate (25)', value: 25 }, { label: 'In Bedroom (0)', value: 0 }, { label: 'TBD (0)', value: -1 }
+    { label: 'Hallway / Separate (25)', value: 25 }, { label: 'In Bedroom (0)', value: 0 }, { label: 'TBD', value: -1 }
   ],
   sqft: [
     { label: '700+ sq ft (25)', value: 25 }, { label: '650-699 sq ft (20)', value: 20 },
     { label: '600-649 sq ft (15)', value: 15 }, { label: '550-599 sq ft (10)', value: 10 },
-    { label: '< 550 sq ft (0)', value: 0 }
+    { label: '< 550 sq ft (0)', value: 0 }, { label: 'TBD', value: -1 }
   ],
   parking: [
-    { label: 'Assigned / Garage (20)', value: 20 }, { label: 'Street Only (0)', value: 0 }
+    { label: 'Assigned / Garage (20)', value: 20 }, { label: 'Street Only (0)', value: 0 },
+    { label: 'TBD', value: -1 }
   ],
   hospital: [
-    { label: '< 5 min e-bike (15)', value: 15 }, { label: '5-10 min e-bike (10)', value: 10 }, { label: '> 10 min (0)', value: 0 }
+    { label: '< 5 min e-bike (15)', value: 15 }, { label: '5-10 min e-bike (10)', value: 10 }, { label: '> 10 min (0)', value: 0 },
+    { label: 'TBD', value: -1 }
   ],
   flooring: [
-    { label: 'Hardwood/Laminate/Tile (10)', value: 10 }, { label: 'Carpet (5)', value: 5 }
+    { label: 'Hardwood/Laminate/Tile (10)', value: 10 }, { label: 'Carpet (5)', value: 5 },
+    { label: 'TBD', value: -1 }
   ],
   storage: [
-    { label: 'Dedicated Storage / Garage (10)', value: 10 }, { label: 'None (0)', value: 0 }
+    { label: 'Dedicated Storage / Garage (10)', value: 10 }, { label: 'None (0)', value: 0 },
+    { label: 'TBD', value: -1 }
   ],
   amtrak: [
-    { label: '< 4 miles flat (10)', value: 10 }, { label: '> 4 miles (0)', value: 0 }
+    { label: '< 4 miles flat (10)', value: 10 }, { label: '> 4 miles (0)', value: 0 },
+    { label: 'TBD', value: -1 }
   ],
   laundry: [
     { label: 'In-Unit (10)', value: 10 }, { label: 'On-Site Shared (0)', value: 0 }, { label: 'None (Dealbreaker)', value: -100 }, { label: 'TBD', value: -1 }
   ],
   dishwasher: [
-    { label: 'Yes (5)', value: 5 }, { label: 'No (0)', value: 0 }
+    { label: 'Yes (5)', value: 5 }, { label: 'No (0)', value: 0 }, { label: 'TBD', value: -1 }
   ]
 };
 
@@ -69,12 +75,42 @@ const FeatureTag = ({ icon, text, color = 'slate' }) => {
 };
 
 export default function App() {
-  const [apartments, setApartments] = useState(MANUAL_DATA);
-  const [scoring, setScoring] = useState(INITIAL_SCORING);
+  const [apartments, setApartments] = useState(() => {
+    try {
+      const savedApts = localStorage.getItem('apartments');
+      // If we have saved data, use it. Otherwise, start with the hardcoded manual data.
+      return savedApts ? JSON.parse(savedApts) : MANUAL_DATA;
+    } catch (error) {
+      console.error("Failed to parse apartments from localStorage", error);
+      return MANUAL_DATA;
+    }
+  });
+  const [scoring, setScoring] = useState(() => {
+    try {
+      const savedScoring = localStorage.getItem('scoringWeights');
+      return savedScoring ? JSON.parse(savedScoring) : INITIAL_SCORING;
+    } catch (error) {
+      console.error("Failed to parse scoring weights from localStorage", error);
+      return INITIAL_SCORING;
+    }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingApt, setEditingApt] = useState(null);
-  const [archivedApartments, setArchivedApartments] = useState([]);
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [isTriggeringScrape, setIsTriggeringScrape] = useState(false);
+  const [scrapeStatus, setScrapeStatus] = useState('');
+  const [isScrapeDialogOpen, setIsScrapeDialogOpen] = useState(false);
+  const [isWeightsDialogOpen, setIsWeightsDialogOpen] = useState(false);
+  const [archivedApartments, setArchivedApartments] = useState(() => {
+    try {
+      const savedArchived = localStorage.getItem('archivedApartments');
+      return savedArchived ? JSON.parse(savedArchived) : [];
+    } catch (error) {
+      console.error("Failed to parse archived apartments from localStorage", error);
+      return [];
+    }
+  });
   const [showArchived, setShowArchived] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -88,6 +124,33 @@ export default function App() {
   const [activeAptIdForCategory, setActiveAptIdForCategory] = useState(null);
   const [newCategoryWeight, setNewCategoryWeight] = useState(5);
 
+  // Effect to save active apartments to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('apartments', JSON.stringify(apartments));
+    } catch (error) {
+      console.error("Failed to save apartments to localStorage", error);
+    }
+  }, [apartments]);
+
+  // Effect to save archived apartments to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('archivedApartments', JSON.stringify(archivedApartments));
+    } catch (error) {
+      console.error("Failed to save archived apartments to localStorage", error);
+    }
+  }, [archivedApartments]);
+
+  // Effect to save scoring weights to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('scoringWeights', JSON.stringify(scoring));
+    } catch (error) {
+      console.error("Failed to save scoring weights to localStorage", error);
+    }
+  }, [scoring]);
+
   useEffect(() => {
     const fetchNewApartments = async () => {
       try {
@@ -96,7 +159,10 @@ export default function App() {
         if (response.ok) {
           const newApts = await response.json();
           // Combine manual data with new data, ensuring no duplicate IDs
+          // This logic now correctly merges newly scraped data with your locally persisted data.
           setApartments(prevApts => {
+            // If prevApts is empty (e.g., localStorage was cleared), start with MANUAL_DATA
+            const currentApts = prevApts.length > 0 ? prevApts : MANUAL_DATA;
             const existingIds = new Set(prevApts.map(a => a.id));
             const filteredNewApts = newApts.filter(a => !existingIds.has(a.id));
             return [...prevApts, ...filteredNewApts];
@@ -116,8 +182,8 @@ export default function App() {
   const defaultForm = {
     address: '', manager: '', listingUrl: '', zillowUrl: '', rent: '', notes: '',
     driveHospital: '', bikeEastBeach: '', bikeArroyoBurro: '', bikeAmtrak: '',
-    neighborhood: 10, bathroom: -1, sqft: 0, parking: 0, hospital: 10,
-    flooring: 10, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0
+    guillotine: 0, neighborhood: -1, bathroom: -1, sqft: -1, parking: -1, hospital: -1,
+    flooring: -1, storage: -1, amtrak: -1, laundry: -1, dishwasher: -1
   };
   const [formData, setFormData] = useState(defaultForm);
 
@@ -125,14 +191,21 @@ export default function App() {
     let score = 0;
     let dealbreakers = [];
     const keys = Object.keys(scoring);
-    keys.forEach(k => { 
-      if (apt[k] !== undefined && k !== 'bathroom' && apt[k] !== -1) score += apt[k]; 
+    keys.forEach(k => {
+      if (apt[k] !== undefined && k !== 'bathroom' && apt[k] !== -1) score += apt[k];
     });
     if (apt.bathroom !== -1 && apt.bathroom !== undefined) score += apt.bathroom;
+    if (apt.guillotine) {
+        score += apt.guillotine;
+    }
+
     if (apt.sqft === 0 && apt.storage === 0) dealbreakers.push("Micro-Unit (<550 sqft) without dedicated storage");
     if (apt.laundry === -100) dealbreakers.push("No laundry on site");
     if (apt.parking === 0) dealbreakers.push("Street parking only");
-    return { score: Math.max(0, score), dealbreakers };
+    if (apt.guillotine === -1000) {
+        dealbreakers.unshift("Guillotine: Fails rent or bedroom criteria");
+    }
+    return { score: score, dealbreakers };
   };
 
   const sortedApartments = useMemo(() => {
@@ -192,6 +265,16 @@ export default function App() {
     setArchivedApartments(archivedApartments.filter(a => a.id !== id));
   };
 
+  const handleResetData = () => {
+    if (window.confirm("Are you sure you want to clear all local changes and reset to the default data? This will reload the page.")) {
+      localStorage.removeItem('apartments');
+      localStorage.removeItem('archivedApartments');
+      localStorage.removeItem('geminiApiKey');
+      localStorage.removeItem('scoringWeights');
+      window.location.reload();
+    }
+  };
+
   // Helper to convert file to base64 for Gemini API
   const fileToGenerativePart = async (file) => {
     const base64EncodedData = await new Promise((resolve) => {
@@ -219,27 +302,30 @@ export default function App() {
 
     try {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+      const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
       const imagePart = await fileToGenerativePart(screenshotFile);
 
       const prompt = `
       You are an expert apartment hunting data-entry assistant. Analyze the attached screenshot of a rental listing and extract the information into a JSON object.
-      The user's hard requirement is for 1-bedroom or 2-bedroom units with rent under $3000. If the listing fails these, return an empty object: {}.
-      Infer numeric scores based on the rules provided. Your response MUST be a single, clean JSON object.
+
+      **SCORING AND CRITERIA:**
+      -   **Guillotine Rule:** If the unit is NOT a 1-bedroom or 2-bedroom, OR if the rent is over $3,000, you MUST assign a 'guillotine' score of -1000. Otherwise, 'guillotine' is 0. This is the most important rule.
+      -   You MUST process the listing and return a full JSON object even if it fails the guillotine rule. Do NOT return a rejection_reason.
+      -   Your response MUST be a single, clean JSON object.
 
       **SCORING RULES:**
       - neighborhood: Downtown (25), Oak Park (20), San Roque (15), Other (10).
       - bathroom: Hallway access (25), In-bedroom (0), Unknown (-1).
       - sqft: 700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0), Unknown (0).
       - parking: Assigned/Garage (20), Street Only (0).
-      - flooring: Hardwood/Laminate/Tile (10), Carpet (5).
-      - storage: Has dedicated storage (10), None (0).
-      - laundry: In-Unit (10), On-Site (0), Unknown (0).
-      - dishwasher: Yes (5), No (0).
+      - flooring: Hardwood/Laminate/Tile (10), Carpet (5), Unknown (5).
+      - storage: Has dedicated storage (10), None (0), Unknown (0).
+      - laundry: In-Unit (10), On-Site (0), None (-100), Unknown (-1).
+      - dishwasher: Yes (5), No (0), Unknown (0).
 
-      **JSON STRUCTURE:**
-      {"address": "string", "rent": integer, "notes": "string (brief summary)", "neighborhood": integer, "bathroom": integer, "sqft": integer, "parking": integer, "flooring": integer, "storage": integer, "laundry": integer, "dishwasher": integer}
+      **SUCCESS JSON STRUCTURE:**
+      {"address": "string", "rent": integer, "notes": "string (brief summary)", "guillotine": integer, "neighborhood": integer, "bathroom": integer, "sqft": integer, "parking": integer, "flooring": integer, "storage": integer, "laundry": integer, "dishwasher": integer}
       `;
 
       const result = await model.generateContent([prompt, imagePart]);
@@ -247,8 +333,11 @@ export default function App() {
       const text = response.text().replace(/```json|```/g, '').trim();
       const parsedData = JSON.parse(text);
 
-      // Update the form with the parsed data, preserving existing fields not returned by the AI
+      // The AI now always returns data, so we can populate the form directly.
+      // The guillotine score will handle the ranking.
+      setParseError('');
       setFormData(prev => ({ ...prev, ...parsedData }));
+
     } catch (e) {
       console.error("Error parsing screenshot:", e);
       setParseError(`Failed to parse screenshot. Check the console for details. Error: ${e.message}`);
@@ -265,6 +354,42 @@ export default function App() {
     // Voice processing logic remains the same
   };
 
+  const handleTriggerScrape = async () => {
+    setIsTriggeringScrape(true);
+    setScrapeStatus('Triggering workflow...');
+
+    try {
+      const response = await fetch('/api/trigger-scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scrape_url: scrapeUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+      setScrapeStatus('✅ Success! Workflow triggered. Check the Actions tab in your GitHub repo for progress.');
+    } catch (error) {
+      console.error('Failed to trigger scrape:', error);
+      setScrapeStatus(`❌ Error: Could not trigger workflow. ${error.message}`);
+    } finally {
+      setIsTriggeringScrape(false);
+    }
+  };
+
+  const handleWeightChange = (category, index, newValue) => {
+    setScoring(prevScoring => {
+      // Create a new top-level object
+      const newScoring = { ...prevScoring };
+      // Create a new array for the category being changed
+      const newOptions = [...newScoring[category]];
+      // Create a new object for the option being changed
+      newOptions[index] = { ...newOptions[index], value: parseInt(newValue, 10) || 0 };
+      // Assign the new array back to the new object
+      newScoring[category] = newOptions;
+      return newScoring;
+    });
+  };
   const handleAddCategory = () => {
     // New category logic remains the same
   };
@@ -308,7 +433,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans p-4 md:p-8 relative">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <header className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Apartment Tracker</h1>
@@ -321,11 +446,83 @@ export default function App() {
                   {showArchived ? 'View Active' : `View Archived (${archivedApartments.length})`}
               </button>
             )}
+            <button onClick={() => setIsWeightsDialogOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
+                <SlidersHorizontal size={16} />
+                Adjust Weights
+            </button>
+            <button onClick={() => setIsScrapeDialogOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
+                <SearchCode size={16} />
+                On-Demand Scrape
+            </button>
+            { (localStorage.getItem('apartments') || localStorage.getItem('archivedApartments')) && (
+              <button onClick={handleResetData} title="Clear all locally saved data and reload" className="text-sm font-medium text-rose-500 hover:text-rose-700 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-rose-100/80"><Trash2 size={16} /> Reset Data</button>
+            )}
             <button onClick={() => { setFormData(defaultForm); setIsFormOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm">
               <Plus size={20} /> Add Apartment
             </button>
           </div>
         </header>
+
+        {isScrapeDialogOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsScrapeDialogOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-slate-200">
+                        <h2 className="text-xl font-bold">On-Demand Scrape</h2>
+                        <p className="text-sm text-slate-500 mt-1">Trigger a new scrape for a specific PDF or webpage URL.</p>
+                    </div>
+                    <div className="p-6">
+                        <label htmlFor="scrape-url-input" className="text-sm font-medium text-slate-700">URL to Scrape</label>
+                        <input id="scrape-url-input" type="text" value={scrapeUrl} onChange={e => setScrapeUrl(e.target.value)} placeholder="https://..." className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                        {scrapeStatus && (
+                            <div className={`mt-4 p-3 rounded-lg text-sm ${scrapeStatus.includes('Error') ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'}`}>
+                                {scrapeStatus}
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-4">
+                        <button onClick={() => setIsScrapeDialogOpen(false)} className="text-sm font-medium text-slate-700 py-2 px-4 rounded-lg hover:bg-slate-200">Cancel</button>
+                        <button onClick={handleTriggerScrape} disabled={isTriggeringScrape || !scrapeUrl} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed">
+                            {isTriggeringScrape && <Loader2 size={16} className="animate-spin" />}
+                            {isTriggeringScrape ? 'Triggering...' : 'Scrape Now'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {isWeightsDialogOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsWeightsDialogOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-6 border-b border-slate-200">
+                        <h2 className="text-xl font-bold">Adjust Scoring Weights</h2>
+                        <button onClick={() => setScoring(INITIAL_SCORING)} className="text-sm font-medium text-rose-500 hover:text-rose-700">Reset to Defaults</button>
+                    </div>
+                    <div className="p-6 overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
+                            {Object.entries(scoring).map(([category, options]) => (
+                                <div key={category} className="space-y-2">
+                                    <h3 className="text-md font-bold text-slate-700 capitalize border-b pb-2 mb-3">{category}</h3>
+                                    {options.map((option, index) => (
+                                        <div key={`${category}-${index}`} className="flex items-center justify-between gap-4">
+                                            <label className="text-sm text-slate-600 flex-grow">{option.label.split('(')[0].trim()}</label>
+                                            <input
+                                                type="number"
+                                                value={option.value}
+                                                onChange={e => handleWeightChange(category, index, e.target.value)}
+                                                className="w-20 p-1 border border-slate-300 rounded-md text-center"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-4 mt-auto">
+                        <button onClick={() => setIsWeightsDialogOpen(false)} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-indigo-700">Done</button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {isFormOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={closeForm}>
@@ -426,106 +623,129 @@ export default function App() {
             <p className="mt-4 font-medium text-slate-600">Checking for new listings from today's scrape...</p>
           </div>
         ) : (
-          <>
+          <div className="mt-6">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-slate-700">{showArchived ? 'Archived Listings' : 'Active Listings'}</h2>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            {/* Card View for Mobile */}
+            <div className="grid grid-cols-1 md:hidden gap-6">
               {apartmentsToDisplay.map((apt, index) => (
-              <div key={apt.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'}`}>
-                
-                {/* Card Header */}
-                <div className="p-5 border-b border-slate-200 flex justify-between items-start">
-                    <div>
-                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>Rank #{index + 1}</span>
-                        <h3 className="text-lg font-bold text-slate-800 mt-2 truncate">
-                            <a href={getMapsUrl(apt.address, 'location')} target="_blank" rel="noreferrer" className="hover:text-indigo-600 transition-colors">{apt.address}</a>
-                        </h3>
-                        <div className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
-                            <span>{apt.manager}</span>
-                            <span>•</span>
-                            <span>${apt.rent}/mo</span>
-                            <span>•</span>
-                            <a href={getZillowLink(apt)} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">
-                                Zillow <ExternalLink size={12} />
-                            </a>
-                        </div>
-                    </div>
-                    <div className="flex-shrink-0 ml-4 text-center">
-                        <div className="w-20 h-20 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner">
-                            <span className="text-3xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
-                            <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Dealbreakers */}
-                {apt.calculated.dealbreakers.length > 0 && (
-                  <div className="bg-rose-100/50 p-4 border-b border-rose-200">
-                    <div className="flex items-center gap-3">
-                      <ShieldAlert className="text-rose-600 shrink-0" size={20} />
+                <div key={`card-${apt.id}`} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'}`}>
+                  <div className="p-5 border-b border-slate-200 flex justify-between items-start">
                       <div>
-                        <span className="text-sm font-bold text-rose-900 block">Dealbreakers</span>
-                        <span className="text-xs text-rose-700">{apt.calculated.dealbreakers.join(', ')}</span>
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>Rank #{index + 1}</span>
+                          <h3 className="text-lg font-bold text-slate-800 mt-2 truncate">
+                              <a href={getMapsUrl(apt.address, 'location')} target="_blank" rel="noreferrer" className="hover:text-indigo-600 transition-colors">{apt.address}</a>
+                          </h3>
+                          <div className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                              <span>{apt.manager}</span> • <span>${apt.rent}/mo</span> •
+                              <a href={getZillowLink(apt)} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">Zillow <ExternalLink size={12} /></a>
+                          </div>
                       </div>
-                    </div>
+                      <div className="flex-shrink-0 ml-4 text-center">
+                          <div className="w-20 h-20 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner">
+                              <span className="text-3xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
+                              <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
+                          </div>
+                      </div>
                   </div>
-                )}
-
-                <div className="p-5 flex-grow">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Key Features</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {renderFeatureTags(apt)}
-                    </div>
-                </div>
-
-                {apt.notes && (
-                  <div className="px-5 pb-5">
-                    <div className="p-4 bg-amber-100/40 rounded-lg flex items-start gap-3 border border-amber-200/60">
-                      <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-sm text-amber-900/90 leading-relaxed font-medium">{apt.notes}</p>
-                    </div>
+                  {apt.calculated.dealbreakers.length > 0 && (
+                    <div className="bg-rose-100/50 p-4 border-b border-rose-200"><div className="flex items-center gap-3"><ShieldAlert className="text-rose-600 shrink-0" size={20} /><div><span className="text-sm font-bold text-rose-900 block">Dealbreakers</span><span className="text-xs text-rose-700">{apt.calculated.dealbreakers.join(', ')}</span></div></div></div>
+                  )}
+                  <div className="p-5 flex-grow">
+                      <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Key Features</h4>
+                      <div className="flex flex-wrap gap-2">{renderFeatureTags(apt)}</div>
                   </div>
-                )}
-
-                <div className="p-2 bg-slate-50 border-t border-slate-200 mt-auto">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                            <a href={getMapsUrl(apt.address, 'hospital')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors w-20">
-                                <Car size={16} />
-                                <span className="text-xs font-medium mt-1 text-center leading-tight">Cottage<br/>{apt.driveHospital || 'TBD'}</span>
-                            </a>
-                            <a href={getMapsUrl(apt.address, 'eastbeach')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors w-20">
-                                <Bike size={16} />
-                                <span className="text-xs font-medium mt-1 text-center leading-tight">East Beach<br/>{apt.bikeEastBeach || 'TBD'}</span>
-                            </a>
-                            <a href={getMapsUrl(apt.address, 'arroyo')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-teal-100 hover:text-teal-700 rounded-md transition-colors w-20">
-                                <Bike size={16} />
-                                <span className="text-xs font-medium mt-1 text-center leading-tight">Arroyo Burro<br/>{apt.bikeArroyoBurro || 'TBD'}</span>
-                            </a>
-                            <a href={getMapsUrl(apt.address, 'amtrak')} target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors w-20">
-                                <Bike size={16} />
-                                <span className="text-xs font-medium mt-1 text-center leading-tight">Amtrak<br/>{apt.bikeAmtrak || 'TBD'}</span>
-                            </a>
-                        </div>
-                        {showArchived ? (
-                            <div className="flex gap-2">
-                                <button onClick={() => restoreApt(apt.id)} title="Restore" className="p-2 text-slate-500 hover:text-green-600 hover:bg-slate-200/60 rounded-md transition-colors"><ArchiveRestore size={16} /></button>
-                                <button onClick={() => permanentlyDeleteApt(apt.id)} title="Delete Permanently" className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button>
-                            </div>
-                        ) : (
-                            <div className="flex gap-2">
-                                <button onClick={() => openEdit(apt)} title="Edit" className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button>
-                                <button onClick={() => archiveApt(apt.id)} title="Archive" className="p-2 text-slate-500 hover:text-amber-600 hover:bg-slate-200/60 rounded-md transition-colors"><Archive size={16} /></button>
-                            </div>
-                        )}
-                    </div>
+                  {apt.notes && (
+                    <div className="px-5 pb-5"><div className="p-4 bg-amber-100/40 rounded-lg flex items-start gap-3 border border-amber-200/60"><Info size={18} className="text-amber-600 shrink-0 mt-0.5" /><p className="text-sm text-amber-900/90 leading-relaxed font-medium">{apt.notes}</p></div></div>
+                  )}
+                  <div className="p-2 bg-slate-50 border-t border-slate-200 mt-auto">
+                      <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1">
+                              <a href={getMapsUrl(apt.address, 'hospital')} title="Check drive time to Cottage Hospital" target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors w-20"><Car size={16} /><span className="text-xs font-medium mt-1 text-center leading-tight">Cottage<br/>{apt.driveHospital || 'TBD'}</span></a>
+                              <a href={getMapsUrl(apt.address, 'eastbeach')} title="Check bike time to East Beach" target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors w-20"><Bike size={16} /><span className="text-xs font-medium mt-1 text-center leading-tight">East Beach<br/>{apt.bikeEastBeach || 'TBD'}</span></a>
+                              <a href={getMapsUrl(apt.address, 'arroyo')} title="Check bike time to Arroyo Burro Beach" target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-teal-100 hover:text-teal-700 rounded-md transition-colors w-20"><Bike size={16} /><span className="text-xs font-medium mt-1 text-center leading-tight">Arroyo Burro<br/>{apt.bikeArroyoBurro || 'TBD'}</span></a>
+                              <a href={getMapsUrl(apt.address, 'amtrak')} title="Check bike time to Amtrak Station" target="_blank" rel="noreferrer" className="flex flex-col items-center p-2 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors w-20"><Bike size={16} /><span className="text-xs font-medium mt-1 text-center leading-tight">Amtrak<br/>{apt.bikeAmtrak || 'TBD'}</span></a>
+                          </div>
+                          {showArchived ? (
+                              <div className="flex gap-2"><button onClick={() => restoreApt(apt.id)} title="Restore" className="p-2 text-slate-500 hover:text-green-600 hover:bg-slate-200/60 rounded-md transition-colors"><ArchiveRestore size={16} /></button><button onClick={() => permanentlyDeleteApt(apt.id)} title="Delete Permanently" className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button></div>
+                          ) : (
+                              <div className="flex gap-2"><button onClick={() => openEdit(apt)} title="Edit" className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button><button onClick={() => archiveApt(apt.id)} title="Archive" className="p-2 text-slate-500 hover:text-amber-600 hover:bg-slate-200/60 rounded-md transition-colors"><Archive size={16} /></button></div>
+                          )}
+                      </div>
+                  </div>
                 </div>
-
-              </div>
               ))}
             </div>
-          </>
+
+            {/* Row View for Desktop */}
+            <div className="hidden md:flex flex-col space-y-2">
+              {/* Desktop Header */}
+              <div className="grid grid-cols-[2.5fr,0.8fr,3fr,1.5fr,2.5fr,0.7fr] gap-x-6 items-center px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider border-b">
+                <span>Apartment</span>
+                <span className="text-center">Score</span>
+                <span>Features</span>
+                <span className="text-center">Commute</span>
+                <span>Notes</span>
+                <span className="text-center">Actions</span>
+              </div>
+              {apartmentsToDisplay.map((apt, index) => (
+                <div key={`row-${apt.id}`} className={`grid grid-cols-[2.5fr,0.8fr,3fr,1.5fr,2.5fr,0.7fr] gap-x-6 items-start bg-white rounded-lg shadow-sm border p-4 transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-md hover:border-slate-300 border-slate-200'}`}>
+                  {/* Col 1: Vitals */}
+                  <div>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>#{index + 1}</span>
+                    <h3 className="font-bold text-slate-800 mt-1 truncate">
+                      <a href={getMapsUrl(apt.address, 'location')} target="_blank" rel="noreferrer" className="hover:text-indigo-600 transition-colors">{apt.address}</a>
+                    </h3>
+                    <div className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                      <span>{apt.manager}</span> • <span>${apt.rent}/mo</span> •
+                      <a href={getZillowLink(apt)} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1 font-semibold">Zillow <ExternalLink size={12} /></a>
+                    </div>
+                  </div>
+                  {/* Col 2: Score */}
+                  <div className="flex-shrink-0 text-center">
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner mx-auto">
+                          <span className="text-2xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
+                          <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
+                      </div>
+                  </div>
+                  {/* Col 3: Features */}
+                  <div className="text-sm">
+                    {apt.calculated.dealbreakers.length > 0 && (
+                      <div className="flex items-center gap-2 text-rose-700 mb-2"><ShieldAlert size={16} /><span className="font-bold">{apt.calculated.dealbreakers.join(', ')}</span></div>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {renderFeatureTags(apt)}
+                    </div>
+                  </div>
+                  {/* Col 4: Commute */}
+                  <div className="flex items-center justify-center gap-1">
+                      <a href={getMapsUrl(apt.address, 'hospital')} title="Drive to Cottage Hospital" target="_blank" rel="noreferrer" className="flex flex-col items-center p-1 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors w-16"><Car size={14} /><span className="text-xs font-medium mt-1 text-center leading-tight">Cottage<br/>{apt.driveHospital || 'TBD'}</span></a>
+                      <a href={getMapsUrl(apt.address, 'eastbeach')} title="Bike to East Beach" target="_blank" rel="noreferrer" className="flex flex-col items-center p-1 text-slate-500 hover:bg-sky-100 hover:text-sky-700 rounded-md transition-colors w-16"><Bike size={14} /><span className="text-xs font-medium mt-1 text-center leading-tight">E. Beach<br/>{apt.bikeEastBeach || 'TBD'}</span></a>
+                      <a href={getMapsUrl(apt.address, 'amtrak')} title="Bike to Amtrak" target="_blank" rel="noreferrer" className="flex flex-col items-center p-1 text-slate-500 hover:bg-orange-100 hover:text-orange-700 rounded-md transition-colors w-16"><Bike size={14} /><span className="text-xs font-medium mt-1 text-center leading-tight">Amtrak<br/>{apt.bikeAmtrak || 'TBD'}</span></a>
+                  </div>
+                  {/* Col 5: Notes */}
+                  <div className="text-sm">
+                    {apt.notes && (
+                      <div className="p-2 bg-amber-100/40 rounded-md flex items-start gap-2 border border-amber-200/60 h-full">
+                        <Info size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-900/90 leading-relaxed font-medium">{apt.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Col 6: Actions */}
+                  <div className="flex items-center justify-center">
+                      {showArchived ? (
+                          <div className="flex flex-col gap-2"><button onClick={() => restoreApt(apt.id)} title="Restore" className="p-2 text-slate-500 hover:text-green-600 hover:bg-slate-200/60 rounded-md transition-colors"><ArchiveRestore size={16} /></button><button onClick={() => permanentlyDeleteApt(apt.id)} title="Delete Permanently" className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-200/60 rounded-md transition-colors"><Trash2 size={16} /></button></div>
+                      ) : (
+                          <div className="flex flex-col gap-2"><button onClick={() => openEdit(apt)} title="Edit" className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-200/60 rounded-md transition-colors"><Edit2 size={16} /></button><button onClick={() => archiveApt(apt.id)} title="Archive" className="p-2 text-slate-500 hover:text-amber-600 hover:bg-slate-200/60 rounded-md transition-colors"><Archive size={16} /></button></div>
+                      )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

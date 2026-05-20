@@ -7,6 +7,16 @@ services:
     ports:
       # Map port 3000 on your Windows machine to port 3000 inside the container
       - "3000:3000"
+    environment:
+      # This variable is often necessary for Create React App's hot-reloading
+      # to work correctly inside a Docker container, especially on Windows.
+      # It switches the file watcher to a more compatible polling mode.
+      - CHOKIDAR_USEPOLLING=true
+      # Increase the memory available to the Node.js process. The default
+      # limit can sometimes be too low for webpack's dev server, causing it to crash.
+      # We also add --no-deprecation to hide warnings from webpack-dev-server.
+      # The --openssl-legacy-provider is added for compatibility with Node.js 17+ and older build tools.
+      - NODE_OPTIONS=--max-old-space-size=4096 --no-deprecation --openssl-legacy-provider
     volumes:
       # Mount the entire project directory to the container's working directory.
       - .:/app

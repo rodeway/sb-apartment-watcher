@@ -2,11 +2,14 @@ import requests
 import os
 import io
 from pypdf import PdfReader
+import time
 import json
+from bs4 import BeautifulSoup
 import google.generativeai as genai
 
-# The direct link to the actual PDF
-URL = "https://www.bartlein.com/wp-content/uploads/2021/07/SBList.pdf"
+# The default URL to scrape. This can be overridden by the SCRAPE_URL environment variable.
+DEFAULT_URL = "https://www.bartlein.com/wp-content/uploads/2021/07/SBList.pdf"
+
 # The baseline text file that gets committed to the repo
 PREVIOUS_TEXT_FILE = "bartlein_previous_text.txt"
 
@@ -42,13 +45,44 @@ def send_discord_alert(message):
     except Exception as e:
         print(f"Failed to send Discord alert: {e}")
 
-def get_pdf_text():
-    """Fetches the PDF binary data and extracts raw text."""
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    response = requests.get(URL, headers=headers)
-    response.raise_for_status()
-    
-    pdf_file = io.BytesIO(response.content)
+def get_commute_times(address, api_key):
+    """Fetches commute times from Google Maps Directions API."""
+    base_url = "https://maps.googleapis.com/maps/api/directions/json"
+    origin = f"{address}, Santa Barbara, CA"
+    commute_times = {
+        "driveHospital": "", "bikeEastBeach": "", "bikeArroyoBurro": "", "bikeAmtrak": ""
+    }
+    destinations = {
+        "driveHospital": ("Santa Barbara Cottage Hospital", "driving"),
+        "bikeEastBeach": ("East Beach, Santa Barbara, CA", "bicycling"),
+        "bikeArroyoBurro": ("Arroyo Burro Beach County Park", "bicycling"),
+        "bikeAmtrak": ("Santa Barbara Amtrak Station", "bicycling"),
+    }
+
+    for key, (destination, mode) in destinations.items():
+        params = {
+            "origin": origin,
+            "destination": destination,
+            "mode": mode,
+            "key": api_key
+        }
+        try:
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            if data["status"] == "OK":
+                duration = data["routes"][0]["legs"][0]["duration"]["text"]
+                commute_times[key] = duration.replace("mins", "min")
+            else:
+                print(f"Maps API Warning for '{address}' to '{destination}': {data['status']}")
+            time.sleep(0.2) # Be a good citizen and avoid hitting API rate limits
+        except Exception as e:
+            print(f"Error fetching directions for '{address}': {e}")
+    return commute_times
+
+def _extract_text_from_pdf(pdf_content):
+    """Extracts raw text from PDF binary data."""
+    pdf_file = io.BytesIO(pdf_content)
     reader = PdfReader(pdf_file)
     
     extracted_text = ""
@@ -57,7 +91,34 @@ def get_pdf_text():
         
     return extracted_text
 
-def check_for_updates_and_diff(current_text):
+def _extract_text_from_html(html_content):
+    """Extracts clean, readable text from HTML content."""
+    soup = BeautifulSoup(html_content, 'lxml')
+    # Attempt to find the main content area, falling back to the body
+    main_content = soup.find('main') or soup.find('body')
+    if main_content:
+        return main_content.get_text(separator='\n', strip=True)
+    return ""
+
+def get_text_from_url(url):
+    """Fetches content from a URL and extracts text based on its type (PDF or HTML)."""
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    print(f"Fetching content from: {url}")
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+
+    content_type = response.headers.get('Content-Type', '').lower()
+    if 'application/pdf' in content_type:
+        print("PDF content type detected.")
+        return _extract_text_from_pdf(response.content)
+    elif 'text/html' in content_type:
+        print("HTML content type detected.")
+        return _extract_text_from_html(response.content)
+    else:
+        print(f"Warning: Unhandled content type '{content_type}'. Attempting to parse as plain text.")
+        return response.text
+
+def check_for_updates_and_diff(current_text, url):
     """Compares current text to previous text and finds added/removed lines."""
     if os.path.exists(PREVIOUS_TEXT_FILE):
         with open(PREVIOUS_TEXT_FILE, 'r', encoding='utf-8') as f:
@@ -98,7 +159,7 @@ def check_for_updates_and_diff(current_text):
     print("✅ No changes detected in the PDF today.")
     return False, ""
 
-def trigger_ai_analysis(pdf_text, diff_message):
+def trigger_ai_analysis(pdf_text, diff_message, url):
     """Sends the full PDF text to the Gemini API for filtering and analysis."""
     print("Update confirmed! Triggering AI analysis...")
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
@@ -108,7 +169,7 @@ def trigger_ai_analysis(pdf_text, diff_message):
         fallback_alert = (
             f"🚨 **BARTLEIN PDF UPDATE DETECTED!** 🚨\n"
             f"(AI analysis skipped: API key not configured)\n"
-            f"[Check the PDF Here]({URL})\n\n"
+            f"[Check the PDF Here]({url})\n\n"
             f"{diff_message}"
         )
         send_discord_alert(fallback_alert)
@@ -119,20 +180,20 @@ def trigger_ai_analysis(pdf_text, diff_message):
         
         # Configure the model to expect a JSON response
         generation_config = genai.GenerationConfig(response_mime_type="application/json")
-        model = genai.GenerativeModel('gemini-1.5-flash-latest', generation_config=generation_config)
+        model = genai.GenerativeModel('gemini-flash-latest', generation_config=generation_config)
 
         prompt = f"""
         You are an expert apartment hunting data-entry assistant for Rob and Selin in Santa Barbara.
-        Your task is to analyze text from a rental listings PDF and convert any suitable listings into a JSON object.
+        Your task is to analyze text from a rental listings source (PDF or webpage) and convert ALL residential listings into a JSON object.
 
-        **CRITICAL CRITERIA:**
-        1.  **Unit Type:** Must be a 1-bedroom or 2-bedroom unit. Ignore studios, 3+ bedroom units, and commercial properties.
-        2.  **Rent:** Must be under $3,000 per month.
+        **SCORING AND CRITERIA:**
+        -   **Guillotine Rule:** If a unit is NOT a 1-bedroom or 2-bedroom, OR if the rent is over $3,000, you MUST assign a 'guillotine' score of -1000. Otherwise, 'guillotine' is 0. This is the most important rule.
+        -   Process ALL residential listings (studios, 3-bedrooms, etc.), but apply the guillotine rule strictly. Ignore commercial-only listings.
 
         **OUTPUT FORMAT:**
         -   You MUST respond with a JSON array of objects.
-        -   Each object represents one apartment that meets the criteria.
-        -   If no units match, you MUST return an empty array: `[]`.
+        -   Each object represents one apartment.
+        -   If there are no residential listings at all, you MUST return an empty array: `[]`.
 
         **SCORING RULES (Use these to assign numeric values):**
         -   neighborhood: {SCORING_RULES['neighborhood']}
@@ -153,9 +214,10 @@ def trigger_ai_analysis(pdf_text, diff_message):
           "address": "string",
           "rent": integer,
           "manager": "Bartlein",
-          "listingUrl": "{URL}",
+          "listingUrl": "{url}",
           "zillowUrl": "",
           "notes": "string (AI-generated summary of key features, e.g., 'Upstairs unit, new carpet, carport.')",
+          "guillotine": integer,
           "neighborhood": integer, "bathroom": integer, "sqft": integer, "parking": 20, "hospital": 10,
           "flooring": integer, "storage": integer, "amtrak": 10, "laundry": integer, "dishwasher": integer,
           "driveHospital": "", "bikeEastBeach": "", "bikeArroyoBurro": "", "bikeAmtrak": ""
@@ -170,9 +232,20 @@ def trigger_ai_analysis(pdf_text, diff_message):
 
         response = model.generate_content(prompt)
         found_units = json.loads(response.text)
+        maps_api_key = os.environ.get("MAPS_API_KEY")
 
         if found_units:
             print(f"AI found {len(found_units)} new unit(s).")
+
+            if not maps_api_key:
+                print("MAPS_API_KEY not found. Skipping commute time lookup.")
+            else:
+                print("Fetching commute times from Google Maps...")
+                for unit in found_units:
+                    times = get_commute_times(unit["address"], maps_api_key)
+                    unit.update(times)
+                    print(f"  -> Fetched times for {unit['address']}")
+
             # Create a directory for the React app's public assets if it doesn't exist
             os.makedirs("public", exist_ok=True)
             # Write the data to a file the React app can fetch
@@ -189,25 +262,25 @@ def trigger_ai_analysis(pdf_text, diff_message):
                 f"The AI analyzed the latest PDF but found no new 1 or 2-bedroom units under $3,000.\n"
             )
             if pages_url:
-                no_units_alert += f"\n[View the live tracker here]({pages_url})\n"
+                no_units_alert += f"\n[View the live tracker here]({pages_url})"
             
-            no_units_alert += f"\n[Check the PDF Here]({URL})\n{diff_message}"
+            no_units_alert += f"\n\n[Check the PDF Here]({url})\n{diff_message}"
 
             send_discord_alert(no_units_alert)
 
     except Exception as e:
-        print(f"Error during Gemini API call: {e}")
+        print(f"Error during Gemini API call: {e}\nResponse text: {response.text if 'response' in locals() else 'N/A'}")
         error_alert = f"🚨 **BARTLEIN PDF UPDATE DETECTED!** 🚨\n[AI analysis failed: {e}]\n\n{diff_message}"
         send_discord_alert(error_alert)
 
 if __name__ == "__main__":
-    print(f"Scanning {URL}...")
+    scrape_url = os.environ.get("SCRAPE_URL", DEFAULT_URL)
     try:
-        pdf_text = get_pdf_text()
-        has_changed, diff_message = check_for_updates_and_diff(pdf_text)
+        content_text = get_text_from_url(scrape_url)
+        has_changed, diff_message = check_for_updates_and_diff(content_text, scrape_url)
         
         if has_changed:
-            trigger_ai_analysis(pdf_text, diff_message)
+            trigger_ai_analysis(content_text, diff_message, scrape_url)
         else:
             pages_url = os.environ.get("PAGES_URL")
             no_change_alert = "✅ **Daily Scrape Complete**\nNo changes were detected in the Bartlein PDF today."

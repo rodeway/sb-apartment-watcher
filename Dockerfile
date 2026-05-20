@@ -1,6 +1,7 @@
 # Use the official Long-Term Support (LTS) version of Node.js.
-# The 'alpine' variant is a lightweight version, which is great for development.
-FROM node:22-alpine
+# The default image is based on Debian, which has better compatibility for
+# some Node.js native modules than the lightweight 'alpine' variant.
+FROM node:22
 
 # Set the working directory inside the container
 WORKDIR /app
