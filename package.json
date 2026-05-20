@@ -1,6 +1,5 @@
 {
   "name": "sb-apartment-watcher",
-  "homepage": "https://rodeway.github.io/sb-apartment-watcher",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
