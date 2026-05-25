@@ -1,32 +1,32 @@
 {
-  "timestamp": "2026-05-24T18:15:03Z",
+  "timestamp": "2026-05-25T20:18:25Z",
   "added_units": [
     {
-      "address": "910 Bath St, Unit A, Santa Barbara, CA 93101"
+      "address": "910 Bath St, Unit A"
     },
     {
-      "address": "154 Kingston Ave, Unit D, Goleta, CA 93117"
+      "address": "154 Kingston Ave, Unit D"
     },
     {
-      "address": "42 Broadmoor Plaza, Unit 5, Santa Barbara, CA 93105"
+      "address": "42 Broadmoor Plaza, Unit 5"
     },
     {
-      "address": "1019 E Haley St, Unit C2, Santa Barbara, CA 93103"
+      "address": "1019 E Haley St, Unit C2"
     },
     {
-      "address": "48 Broadmoor Plaza, Unit 8, Santa Barbara, CA 93105"
+      "address": "48 Broadmoor Plaza, Unit 8"
     },
     {
-      "address": "3960 Via Lucero, Unit 3, Santa Barbara, CA 93105"
+      "address": "3960 Via Lucero, Unit 3"
     },
     {
-      "address": "311 Ellwood Beach Dr, Unit 12, Goleta, CA 93117"
+      "address": "311 Ellwood Beach Dr, Unit 12"
     },
     {
-      "address": "1219 De La Vina St, Unit 1, Santa Barbara, CA 93101"
+      "address": "1219 De La Vina St., Unit 1"
     },
     {
-      "address": "29 Broadmoor Plaza, Unit 8, Santa Barbara, CA 93105"
+      "address": "29 Broadmoor Plaza, Unit 8"
     }
   ]
 }
