@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode, Map } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import WeightCalculator from './WeightCalculator';
 
@@ -160,6 +160,8 @@ export default function App() {
   const [processingAptId, setProcessingAptId] = useState(null);
   const [pendingCategories, setPendingCategories] = useState([]);
   const [activeAptIdForCategory, setActiveAptIdForCategory] = useState(null);
+  const [isFetchingCommutes, setIsFetchingCommutes] = useState(false);
+  const [commuteFetchStatus, setCommuteFetchStatus] = useState('');
   const [newCategoryWeight, setNewCategoryWeight] = useState(5);
 
   // Effect to save active apartments to localStorage whenever they change
@@ -572,6 +574,62 @@ export default function App() {
     // Voice processing logic remains the same
   };
 
+  const handleFetchAllCommutes = async () => {
+    setIsFetchingCommutes(true);
+    setCommuteFetchStatus('Initializing...');
+
+    const allApartments = [...apartments, ...archivedApartments];
+    const apartmentsToUpdate = allApartments.filter(apt => 
+        !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
+    );
+
+    if (apartmentsToUpdate.length === 0) {
+        setCommuteFetchStatus('✅ All apartments have complete commute data.');
+        setTimeout(() => setIsFetchingCommutes(false), 3000);
+        return;
+    }
+
+    let updatedApartments = [...apartments];
+    let updatedArchived = [...archivedApartments];
+
+    for (let i = 0; i < apartmentsToUpdate.length; i++) {
+        const apt = apartmentsToUpdate[i];
+        setCommuteFetchStatus(`Fetching for "${apt.address}"... (${i + 1} of ${apartmentsToUpdate.length})`);
+
+        try {
+            const response = await fetch('/api/get-commute-times', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: apt.address }),
+            });
+
+            if (!response.ok) {
+                console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+                continue; // Skip to the next one
+            }
+
+            const newTimes = await response.json();
+
+            const activeIndex = updatedApartments.findIndex(a => a.id === apt.id);
+            if (activeIndex !== -1) {
+                updatedApartments[activeIndex] = { ...updatedApartments[activeIndex], ...newTimes };
+            } else {
+                const archivedIndex = updatedArchived.findIndex(a => a.id === apt.id);
+                if (archivedIndex !== -1) {
+                    updatedArchived[archivedIndex] = { ...updatedArchived[archivedIndex], ...newTimes };
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching commute for ${apt.address}:`, error);
+        }
+    }
+
+    setApartments(updatedApartments);
+    setArchivedApartments(updatedArchived);
+    setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
+    setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
+  };
+
   const handleTriggerScrape = async () => {
     setIsTriggeringScrape(true);
     setScrapeStatus('Triggering workflow...');
@@ -706,6 +764,10 @@ export default function App() {
                 <SearchCode size={16} />
                 On-Demand Scrape
             </button>
+            <button onClick={handleFetchAllCommutes} disabled={isFetchingCommutes} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-wait">
+                {isFetchingCommutes ? <Loader2 size={16} className="animate-spin" /> : <Map size={16} />}
+                Fetch Commutes
+            </button>
             { (localStorage.getItem('apartments') || localStorage.getItem('archivedApartments')) && (
               <button onClick={handleResetData} title="Clear all locally saved data and reload" className="text-sm font-medium text-rose-500 hover:text-rose-700 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-rose-100/80"><Trash2 size={16} /> Reset Data</button>
             )}
@@ -714,6 +776,18 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {isFetchingCommutes && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center" onClick={e => e.stopPropagation()}>
+                    <Loader2 size={40} className="animate-spin text-indigo-600 mx-auto" />
+                    <h2 className="text-xl font-bold mt-4">Fetching Commute Times</h2>
+                    <p className="text-slate-600 mt-2 min-h-[20px]">
+                        {commuteFetchStatus}
+                    </p>
+                </div>
+            </div>
+        )}
 
         {isScrapeDialogOpen && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsScrapeDialogOpen(false)}>
