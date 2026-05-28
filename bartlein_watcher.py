@@ -166,10 +166,31 @@ def check_for_updates_and_diff(current_text, url):
     print("✅ No changes detected for this URL.")
     return False, ""
 
-def trigger_ai_analysis(pdf_text, diff_message, url):
+def get_manager_from_url(url):
+    """Infers a manager name from the URL."""
+    url_lower = url.lower()
+    if "bartlein" in url_lower:
+        return "Bartlein"
+    if "sierraprop" in url_lower: # handles sierrapropsb.com
+        return "Sierra"
+    if "meridian" in url_lower:
+        return "Meridian"
+    
+    # Fallback to parsing the domain name
+    try:
+        domain = url.split('/')[2]
+        # remove www. and common suffixes
+        manager_name = domain.replace('www.', '').split('.')[0]
+        return manager_name.capitalize()
+    except Exception:
+        return "Unknown"
+
+def trigger_ai_analysis(text_content, diff_message, url):
     """Sends the full PDF text to the Gemini API for filtering and analysis."""
     print("Update confirmed! Triggering AI analysis...")
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    manager_name = get_manager_from_url(url)
+    print(f"Inferred manager: {manager_name}")
 
     if not gemini_api_key:
         print("GEMINI_API_KEY not found. Sending basic alert without AI analysis.")
@@ -193,8 +214,15 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
         You are an expert apartment hunting data-entry assistant for Rob and Selin in Santa Barbara.
         Your task is to analyze text from a rental listings source (PDF or webpage) and convert ALL residential listings into a JSON object.
 
+        **ID GENERATION (CRITICAL):**
+        -   You MUST generate a unique integer ID for each apartment.
+        -   Create the ID by combining the primary address number and the full rent amount.
+        -   **Example:** For an apartment at "123 E Anapamu St" with a rent of $2850, the ID MUST be `1232850`.
+        -   **Example:** For "45 W Arrellaga #B" with rent $2900, the ID MUST be `452900`.
+        -   This is the most important rule for preventing duplicate entries.
+
         **SCORING AND CRITERIA:**
-        -   **Guillotine Rule:** If a unit is NOT a 1-bedroom or 2-bedroom, OR if the rent is over $3,000, you MUST assign a 'guillotine' score of -1000. Otherwise, 'guillotine' is 0. This is the most important rule.
+        -   **Guillotine Rule:** If a unit is NOT a 1-bedroom or 2-bedroom, OR if the rent is over $3,000, you MUST assign a 'guillotine' score of -1000. Otherwise, 'guillotine' is 0.
         -   Process ALL residential listings (studios, 3-bedrooms, etc.), but apply the guillotine rule strictly. Ignore commercial-only listings.
 
         **OUTPUT FORMAT:**
@@ -217,10 +245,10 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
         **JSON OBJECT STRUCTURE FOR EACH APARTMENT:**
         ```json
         {{
-          "id": integer (generate a unique id, e.g., from the address numbers),
+          "id": integer (Generated using the critical rule above),
           "address": "string",
           "rent": integer,
-          "manager": "Bartlein",
+          "manager": "{manager_name}",
           "listingUrl": "{url}",
           "zillowUrl": "",
           "notes": "string (AI-generated summary of key features, e.g., 'Upstairs unit, new carpet, carport.')",
@@ -231,9 +259,9 @@ def trigger_ai_analysis(pdf_text, diff_message, url):
         }}
         ```
 
-        **PDF TEXT TO ANALYZE:**
+        **TEXT TO ANALYZE:**
         ---
-        {pdf_text}
+        {text_content}
         ---
         """
 
