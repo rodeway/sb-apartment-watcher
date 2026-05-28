@@ -582,18 +582,34 @@ export default function App() {
     const apartmentsToUpdate = allApartments.filter(apt => 
         !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
     );
+    // Use a brief timeout to ensure the "Initializing..." state renders before we start the heavy lifting.
+    // This prevents the UI from feeling frozen.
+    setTimeout(async () => {
+      const allApartments = [...apartments, ...archivedApartments];
+      const apartmentsToUpdate = allApartments.filter(apt => 
+          !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
+      );
 
     if (apartmentsToUpdate.length === 0) {
         setCommuteFetchStatus('✅ All apartments have complete commute data.');
         setTimeout(() => setIsFetchingCommutes(false), 3000);
         return;
     }
+      if (apartmentsToUpdate.length === 0) {
+          setCommuteFetchStatus('✅ All apartments have complete commute data.');
+          setTimeout(() => setIsFetchingCommutes(false), 3000);
+          return;
+      }
 
     const updatesMap = new Map();
+      const updatesMap = new Map();
 
     for (let i = 0; i < apartmentsToUpdate.length; i++) {
         const apt = apartmentsToUpdate[i];
         setCommuteFetchStatus(`Fetching for "${apt.address}"... (${i + 1} of ${apartmentsToUpdate.length})`);
+      for (let i = 0; i < apartmentsToUpdate.length; i++) {
+          const apt = apartmentsToUpdate[i];
+          setCommuteFetchStatus(`Fetching for "${apt.address}"... (${i + 1} of ${apartmentsToUpdate.length})`);
 
         try {
           const response = await fetch('/api/get-commute-times', {
@@ -601,27 +617,50 @@ export default function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ address: apt.address }),
           });
+          try {
+            const response = await fetch('/api/get-commute-times', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: apt.address }),
+            });
 
           if (!response.ok) {
               console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
               continue; // Skip to the next one
           }
+            if (!response.ok) {
+                console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+                continue; // Skip to the next one
+            }
 
           const newTimes = await response.json();
           updatesMap.set(apt.id, newTimes);
+            const newTimes = await response.json();
+            updatesMap.set(apt.id, newTimes);
 
         } catch (error) {
             console.error(`Error fetching commute for ${apt.address}:`, error);
         }
     }
+          } catch (error) {
+              console.error(`Error fetching commute for ${apt.address}:`, error);
+          }
+      }
 
     // Use a functional update to ensure we're updating based on the latest state
     // and to guarantee a re-render.
     setApartments(prevApts => prevApts.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
     setArchivedApartments(prevArchived => prevArchived.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
+      // Use a functional update to ensure we're updating based on the latest state
+      // and to guarantee a re-render.
+      setApartments(prevApts => prevApts.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
+      setArchivedApartments(prevArchived => prevArchived.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
 
     setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
     setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
+      setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
+      setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
+    }, 100); // A small delay to allow the UI to update to "Initializing..."
   };
 
   const handleTriggerScrape = async () => {
