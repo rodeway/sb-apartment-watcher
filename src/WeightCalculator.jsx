@@ -83,6 +83,32 @@ const QUESTIONS = [
   }
 ];
 
+// This pure function calculates weights from the 1-10 survey answers.
+// It's moved outside the component to be a reusable helper.
+const getInitialWeightsFromAnswers = (currentAnswers) => {
+  const totalRaw = Object.values(currentAnswers).reduce((acc, val) => acc + val, 0);
+  if (totalRaw === 0) return {};
+
+  let calculatedWeights = {};
+  let currentSum = 0;
+  
+  const keys = Object.keys(currentAnswers);
+  keys.forEach((key) => {
+    let weight = Math.round((currentAnswers[key] / totalRaw) * 400);
+    calculatedWeights[key] = weight;
+    currentSum += weight;
+  });
+
+  const difference = 400 - currentSum;
+  if (difference !== 0) {
+    const highestKey = Object.keys(calculatedWeights).reduce((a, b) => 
+      calculatedWeights[a] > calculatedWeights[b] ? a : b
+    );
+    calculatedWeights[highestKey] += difference;
+  }
+  return calculatedWeights;
+};
+
 export default function WeightCalculator({ onWeightsCalculated, onClose }) {
   const [step, setStep] = useState(-1);
   const [isDirectEdit, setIsDirectEdit] = useState(false);
@@ -98,28 +124,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
   const [copied, setCopied] = useState(false);
 
   const calculateWeights = useCallback(() => {
-    const totalRaw = Object.values(answers).reduce((acc, val) => acc + val, 0);
-    if (totalRaw === 0) return;
-
-    let calculatedWeights = {};
-    let currentSum = 0;
-    
-    const keys = Object.keys(answers);
-    keys.forEach((key) => {
-      let weight = Math.round((answers[key] / totalRaw) * 400);
-      calculatedWeights[key] = weight;
-      currentSum += weight;
-    });
-
-    const difference = 400 - currentSum;
-    if (difference !== 0) {
-      const highestKey = Object.keys(calculatedWeights).reduce((a, b) => 
-        calculatedWeights[a] > calculatedWeights[b] ? a : b
-      );
-      calculatedWeights[highestKey] += difference;
-    }
-
-    setWeights(calculatedWeights);
+    setWeights(getInitialWeightsFromAnswers(answers));
   }, [answers]);
 
   useEffect(() => {
@@ -237,6 +242,23 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     });
   };
 
+  const startWithTiers = () => {
+    const initialWeights = getInitialWeightsFromAnswers(answers);
+    const sortedIds = Object.keys(initialWeights).sort((a, b) => initialWeights[b] - initialWeights[a]);
+    
+    setOrderedList(sortedIds);
+    calculateTieredWeights(sortedIds); // This calculates and sets the final weights based on rank
+    
+    setStep(QUESTIONS.length);
+    setIsTieredEdit(true);
+  };
+
+  const startWithSliders = () => {
+    setWeights(getInitialWeightsFromAnswers(answers)); // Use default answers for baseline
+    setStep(QUESTIONS.length);
+    setIsDirectEdit(true);
+  };
+
   if (step === -1) {
     return (
       <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl p-8 text-center border border-slate-700 my-auto">
@@ -245,15 +267,27 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
           </div>
           <h1 className="text-3xl font-bold text-white mb-4">Scorecard Calibrator</h1>
           <p className="text-slate-400 mb-8 leading-relaxed text-sm">
-            Let's stress-test your priorities for the Santa Barbara hunt. Answer these 10 questions to dynamically generate a custom <strong>400-point</strong> weighting architecture for Rob & Selin.
+            Choose your method to generate the <strong>400-point</strong> scoring architecture.
           </p>
-          <button 
-            onClick={nextStep}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 shadow-lg shadow-blue-500/30"
-          >
-            Start Calibration
-          </button>
-          <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 mt-6">
+          
+          <div className="space-y-4 text-left">
+            <button onClick={nextStep} className="w-full text-left p-4 bg-blue-600/20 hover:bg-blue-600/30 rounded-lg border border-blue-500/50 transition-all duration-200 transform hover:scale-105">
+                <h3 className="font-bold text-blue-300">Start Questionnaire (Recommended)</h3>
+                <p className="text-sm text-slate-400 mt-1">A 10-question guided survey to establish a baseline for your priorities.</p>
+            </button>
+            
+            <button onClick={startWithTiers} className="w-full text-left p-4 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-all duration-200">
+                <h3 className="font-bold text-white">Rank by Tiers</h3>
+                <p className="text-sm text-slate-400 mt-1">For decisive users: directly rank features from most to least important.</p>
+            </button>
+
+            <button onClick={startWithSliders} className="w-full text-left p-4 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-all duration-200">
+                <h3 className="font-bold text-white">Fine-Tune Sliders</h3>
+                <p className="text-sm text-slate-400 mt-1">For hands-on users: jump straight to the proportional sliders.</p>
+            </button>
+          </div>
+
+          <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 mt-8">
             Cancel
           </button>
       </div>
