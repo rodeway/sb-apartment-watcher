@@ -208,6 +208,43 @@ export default function App() {
     }
   }, [showWeightConfirmation]);
 
+  // Effect to automatically archive/restore apartments based on guillotine criteria
+  useEffect(() => {
+    const activeToArchive = [];
+    const archivedToRestore = [];
+
+    // Check active apartments to see if they should be archived
+    apartments.forEach(apt => {
+      const { dealbreakers } = calculateScore(apt);
+      if (dealbreakers.length > 0) {
+        activeToArchive.push(apt.id);
+      }
+    });
+
+    // Check archived apartments to see if they should be restored
+    archivedApartments.forEach(apt => {
+      const { dealbreakers } = calculateScore(apt);
+      if (dealbreakers.length === 0) {
+        archivedToRestore.push(apt.id);
+      }
+    });
+
+    // If there are changes to be made, update the state in one go to avoid infinite loops
+    if (activeToArchive.length > 0 || archivedToRestore.length > 0) {
+      const newActive = [
+        ...apartments.filter(a => !activeToArchive.includes(a.id)),
+        ...archivedApartments.filter(a => archivedToRestore.includes(a.id))
+      ];
+      const newArchived = [
+        ...archivedApartments.filter(a => !archivedToRestore.includes(a.id)),
+        ...apartments.filter(a => activeToArchive.includes(a.id))
+      ];
+
+      setApartments(newActive);
+      setArchivedApartments(newArchived);
+    }
+  }, [apartments, archivedApartments, calculateScore]); // calculateScore is dependent on guillotineCriteria
+
   useEffect(() => {
     const fetchNewApartments = async () => {
       try {
