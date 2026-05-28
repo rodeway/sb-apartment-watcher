@@ -366,7 +366,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="space-y-4">
               <h3 className="font-semibold text-slate-300 border-b border-slate-700 pb-2">Weight Distribution</h3>
-              <div className="max-h-[350px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+              <div className="pr-2 space-y-3">
                 {Object.entries(sortedWeights).map(([key, value]) => {
                   const q = QUESTIONS.find(q => q.id === key);
                   const displayLabel = q ? q.sliderLabel : key;
@@ -399,7 +399,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
                   {copied ? 'Copied!' : 'Copy JSON'}
                 </button>
               </div>
-              <pre className="text-xs text-emerald-400 font-mono overflow-y-auto flex-1 custom-scrollbar">
+              <pre className="text-xs text-emerald-400 font-mono flex-1">
                 {JSON.stringify(weights, null, 2)}
               </pre>
             </div>
