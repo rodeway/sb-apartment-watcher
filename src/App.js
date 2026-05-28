@@ -584,7 +584,7 @@ export default function App() {
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Apartment Tracker</h1>
             <p className="text-slate-500 font-medium">v9.7 "Vercel Sync" Edition</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center flex-wrap justify-end gap-4">
             {archivedApartments.length > 0 && (
               <button onClick={() => setShowArchived(!showArchived)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
                   {showArchived ? <CheckCircle2 size={16} /> : <Archive size={16} />}
