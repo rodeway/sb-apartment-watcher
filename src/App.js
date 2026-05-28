@@ -231,8 +231,23 @@ export default function App() {
     const currentActiveIds = apartments.map(a => a.id).sort((a, b) => a - b).join(',');
     const newArchivedIds = newArchived.map(a => a.id).sort((a, b) => a - b).join(',');
     const currentArchivedIds = archivedApartments.map(a => a.id).sort((a, b) => a - b).join(',');
+    // before setting the state. A robust way to do this is to compare Sets of IDs,
+    // which is not dependent on array order.
+    const newActiveIdSet = new Set(newActive.map(a => a.id));
+    const currentActiveIdSet = new Set(apartments.map(a => a.id));
+    const newArchivedIdSet = new Set(newArchived.map(a => a.id));
+    const currentArchivedIdSet = new Set(archivedApartments.map(a => a.id));
 
     if (newActiveIds !== currentActiveIds || newArchivedIds !== currentArchivedIds) {
+    const areSetsEqual = (setA, setB) => {
+      if (setA.size !== setB.size) return false;
+      for (const item of setA) {
+        if (!setB.has(item)) return false;
+      }
+      return true;
+    };
+
+    if (!areSetsEqual(newActiveIdSet, currentActiveIdSet) || !areSetsEqual(newArchivedIdSet, currentArchivedIdSet)) {
       setApartments(newActive);
       setArchivedApartments(newArchived);
     }
