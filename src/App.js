@@ -562,7 +562,7 @@ export default function App() {
         )}
 
         {isCalculatorOpen && (
-            <div className="fixed inset-0 z-50 bg-slate-900">
+            <div className="fixed inset-0 z-50 bg-slate-900 overflow-y-auto">
                 <WeightCalculator 
                     onWeightsCalculated={handleWeightsCalculated}
                     onClose={() => setIsCalculatorOpen(false)}
