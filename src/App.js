@@ -130,6 +130,15 @@ export default function App() {
       return [];
     }
   });
+  const [isGuillotineMenuOpen, setIsGuillotineMenuOpen] = useState(false);
+  const [guillotineCriteria, setGuillotineCriteria] = useState(() => {
+      try {
+        const savedCriteria = localStorage.getItem('guillotineCriteria');
+        return savedCriteria ? JSON.parse(savedCriteria) : { maxPrice: 3000, streetParking: true };
+      } catch (error) {
+        return { maxPrice: 3000, streetParking: true };
+      }
+  });
   const [showWeightConfirmation, setShowWeightConfirmation] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -179,6 +188,15 @@ export default function App() {
       console.error("Failed to save weight profiles to localStorage", error);
     }
   }, [savedProfiles]);
+
+  // Effect to save guillotine criteria to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('guillotineCriteria', JSON.stringify(guillotineCriteria));
+    } catch (error) {
+      console.error("Failed to save guillotine criteria to localStorage", error);
+    }
+  }, [guillotineCriteria]);
 
   // Effect to auto-hide the weight confirmation dialog
   useEffect(() => {
@@ -297,11 +315,23 @@ export default function App() {
     score = Math.round(score);
 
     if (apt.sqft === 0 && apt.storage === 0) dealbreakers.push("Micro-Unit (<550 sqft) without dedicated storage");
-    if (apt.laundry === -100) dealbreakers.push("No laundry on site");
-    if (apt.parking === 0) dealbreakers.push("Street parking only");
-    if (apt.guillotine === -1000) dealbreakers.unshift("Guillotine: Fails rent or bedroom criteria");
+    if (apt.laundry === -100) dealbreakers.push("No on-site laundry");
+
+    // Dynamic Guillotines from user menu
+    if (apt.rent > guillotineCriteria.maxPrice) {
+      dealbreakers.push(`Rent > $${guillotineCriteria.maxPrice}`);
+    }
+    if (guillotineCriteria.streetParking && apt.parking === 0) {
+      dealbreakers.push("Street parking only");
+    }
+
+    // AI-based guillotine (for bedroom count)
+    if (apt.guillotine === -1000) {
+      dealbreakers.unshift("Guillotine: Fails bedroom criteria");
+    }
+
     return { score, dealbreakers };
-  }, [weights]);
+  }, [weights, guillotineCriteria]);
 
   const sortedApartments = useMemo(() => {
     return [...apartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
@@ -366,6 +396,7 @@ export default function App() {
       localStorage.removeItem('archivedApartments');
       localStorage.removeItem('geminiApiKey');
       localStorage.removeItem('scoringWeights400');
+      localStorage.removeItem('guillotineCriteria');
       localStorage.removeItem('savedWeightProfiles');
       localStorage.removeItem('scoringWeights');
       window.location.reload();
@@ -560,6 +591,10 @@ export default function App() {
                   {showArchived ? 'View Active' : `View Archived (${archivedApartments.length})`}
               </button>
             )}
+            <button onClick={() => setIsGuillotineMenuOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
+                <ShieldAlert size={16} />
+                Guillotines
+            </button>
             <button onClick={() => setIsCalculatorOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
                 <SlidersHorizontal size={16} />
                 Adjust Weights
@@ -609,6 +644,47 @@ export default function App() {
                             {isTriggeringScrape && <Loader2 size={16} className="animate-spin" />}
                             {isTriggeringScrape ? 'Triggering...' : 'Scrape Now'}
                         </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {isGuillotineMenuOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsGuillotineMenuOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-slate-200">
+                        <h2 className="text-xl font-bold">Guillotine Criteria</h2>
+                        <p className="text-sm text-slate-500 mt-1">Set hard dealbreakers that will flag a listing.</p>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div>
+                            <label htmlFor="max-price-input" className="text-sm font-medium text-slate-700">Max Price</label>
+                            <div className="relative mt-1">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <span className="text-gray-500 sm:text-sm">$</span>
+                                </div>
+                                <input 
+                                    id="max-price-input" 
+                                    type="number" 
+                                    value={guillotineCriteria.maxPrice} 
+                                    onChange={e => setGuillotineCriteria(prev => ({ ...prev, maxPrice: parseInt(e.target.value, 10) || 0 }))} 
+                                    className="w-full p-2 pl-7 border border-slate-300 rounded-lg" 
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                            <input
+                                id="street-parking-checkbox"
+                                type="checkbox"
+                                checked={guillotineCriteria.streetParking}
+                                onChange={e => setGuillotineCriteria(prev => ({ ...prev, streetParking: e.target.checked }))}
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <label htmlFor="street-parking-checkbox" className="ml-3 block text-sm text-slate-700">Flag listings with "Street Parking Only"</label>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-4">
+                        <button onClick={() => setIsGuillotineMenuOpen(false)} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-indigo-700">Done</button>
                     </div>
                 </div>
             </div>
