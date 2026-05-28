@@ -535,12 +535,12 @@ export default function App() {
       **SCORING RULES:**
       - neighborhood: Downtown (25), Oak Park (20), San Roque (15), Other (10).
       - bathroom: Hallway access (25), In-bedroom (0), Unknown (-1).
-      - sqft: 700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0), Unknown (0).
+      - sqft: 700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0), Unknown (-1).
       - parking: Assigned/Garage (20), Street Only (0).
-      - flooring: Hardwood/Laminate/Tile (10), Carpet (5), Unknown (5).
-      - storage: Has dedicated storage (10), None (0), Unknown (0).
+      - flooring: Hardwood/Laminate/Tile (10), Carpet (5), Unknown (-1).
+      - storage: Has dedicated storage (10), None (0), Unknown (-1).
       - laundry: In-Unit (10), On-Site (0), None (-100), Unknown (-1).
-      - dishwasher: Yes (5), No (0), Unknown (0).
+      - dishwasher: Yes (5), No (0), Unknown (-1).
 
       **SUCCESS JSON STRUCTURE:**
       {"address": "string", "rent": integer, "notes": "string (brief summary)", "guillotine": integer, "neighborhood": integer, "bathroom": integer, "sqft": integer, "parking": integer, "flooring": integer, "storage": integer, "laundry": integer, "dishwasher": integer}

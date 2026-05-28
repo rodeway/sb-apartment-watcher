@@ -17,14 +17,14 @@ DAILY_URLS_FILE = "daily_scrape_urls.txt"
 SCORING_RULES = {
     "neighborhood": "Downtown (25), Oak Park (20), San Roque (15), Other (10). Infer from address.",
     "bathroom": "Hallway/living area access (25), Inside the bedroom (0). If layout is unknown, use -1.",
-    "sqft": "700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0). If unknown, use 0.",
+    "sqft": "700+ (25), 650-699 (20), 600-649 (15), 550-599 (10), <550 (0). If unknown, use -1.",
     "parking": "Assume 20 (Garage/Carport/Assigned) as this is a minimum requirement for Bartlein listings.",
     "hospital": "Default to 10. User will verify exact e-bike time.",
-    "flooring": "Hardwood/Laminate/Tile (10), Carpet (5). If unknown, default to 10.",
-    "storage": "Exterior lockers or garage (10), None (0). If unknown, use 0.",
+    "flooring": "Hardwood/Laminate/Tile (10), Carpet (5). If unknown, use -1.",
+    "storage": "Exterior lockers or garage (10), None (0). If unknown, use -1.",
     "amtrak": "Default to 10. User will verify exact e-bike time.",
-    "laundry": "In-Unit (10), On-Site Shared (0). If unknown, use 0.",
-    "dishwasher": "Yes (5), No (0). If unknown, use 0."
+    "laundry": "In-Unit (10), On-Site Shared (0). If unknown, use -1.",
+    "dishwasher": "Yes (5), No (0). If unknown, use -1."
 }
 
 def send_discord_alert(message):
