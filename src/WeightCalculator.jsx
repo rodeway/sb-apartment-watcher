@@ -109,11 +109,12 @@ const getInitialWeightsFromAnswers = (currentAnswers) => {
   return calculatedWeights;
 };
 
-export default function WeightCalculator({ onWeightsCalculated, onClose }) {
+export default function WeightCalculator({ onWeightsCalculated, onClose, savedProfiles, onLoadProfile }) {
   const [step, setStep] = useState(-1);
   const [isDirectEdit, setIsDirectEdit] = useState(false);
   const [isTieredEdit, setIsTieredEdit] = useState(false);
-  
+  const [showProfiles, setShowProfiles] = useState(false);
+
   const [answers, setAnswers] = useState({
     bathroom: 5, sqft: 5, neighborhood: 5, parking: 5, hospital: 5,
     flooring: 5, storage: 5, amtrak: 5, laundry: 5, dishwasher: 5
@@ -228,6 +229,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     setStep(-1);
     setIsDirectEdit(false);
     setIsTieredEdit(false);
+    setShowProfiles(false);
     setCopied(false);
     setAnswers({ bathroom: 5, sqft: 5, neighborhood: 5, parking: 5, hospital: 5, flooring: 5, storage: 5, amtrak: 5, laundry: 5, dishwasher: 5 });
   };
@@ -259,6 +261,40 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     setIsDirectEdit(true);
   };
 
+  if (showProfiles) {
+    return (
+      <div className="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700 my-auto">
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">Load Saved Profile</h2>
+        <p className="text-slate-400 text-center mb-8 text-sm">Select one of your 5 most recent scoring models.</p>
+
+        <div className="space-y-3">
+          {savedProfiles && savedProfiles.length > 0 ? (
+            savedProfiles.map(profile => (
+              <div key={profile.id} className="flex items-center justify-between p-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <div>
+                  <p className="font-semibold text-slate-300">Saved Profile</p>
+                  <p className="text-xs text-slate-500">{profile.name}</p>
+                </div>
+                <button
+                  onClick={() => onLoadProfile(profile.weights)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-5 rounded-lg transition-colors"
+                >
+                  Load
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-slate-400 py-8">You have no saved profiles yet.</p>
+          )}
+        </div>
+
+        <div className="text-center mt-8">
+          <button onClick={() => setShowProfiles(false)} className="text-sm text-slate-400 hover:text-slate-200">Back to Main Menu</button>
+        </div>
+      </div>
+    );
+  }
+
   if (step === -1) {
     return (
       <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl p-8 text-center border border-slate-700 my-auto">
@@ -284,6 +320,13 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
             <button onClick={startWithSliders} className="w-full text-left p-4 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-all duration-200">
                 <h3 className="font-bold text-white">Fine-Tune Sliders</h3>
                 <p className="text-sm text-slate-400 mt-1">For hands-on users: jump straight to the proportional sliders.</p>
+            </button>
+
+            <button onClick={() => setShowProfiles(true)} className="w-full text-left p-4 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600 transition-all duration-200">
+                <h3 className="font-bold text-white">Load a Saved Profile</h3>
+                <p className="text-sm text-slate-400 mt-1">
+                  Select from your {savedProfiles?.length || 0} most recent scoring models.
+                </p>
             </button>
           </div>
 

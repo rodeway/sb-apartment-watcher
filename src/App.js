@@ -121,6 +121,15 @@ export default function App() {
       return [];
     }
   });
+  const [savedProfiles, setSavedProfiles] = useState(() => {
+    try {
+      const profiles = localStorage.getItem('savedWeightProfiles');
+      return profiles ? JSON.parse(profiles) : [];
+    } catch (error) {
+      console.error("Failed to parse saved profiles from localStorage", error);
+      return [];
+    }
+  });
   const [showArchived, setShowArchived] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -160,6 +169,15 @@ export default function App() {
       console.error("Failed to save scoring weights to localStorage", error);
     }
   }, [weights]);
+
+  // Effect to save profiles to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('savedWeightProfiles', JSON.stringify(savedProfiles));
+    } catch (error) {
+      console.error("Failed to save weight profiles to localStorage", error);
+    }
+  }, [savedProfiles]);
 
   useEffect(() => {
     const fetchNewApartments = async () => {
@@ -337,6 +355,7 @@ export default function App() {
       localStorage.removeItem('archivedApartments');
       localStorage.removeItem('geminiApiKey');
       localStorage.removeItem('scoringWeights400');
+      localStorage.removeItem('savedWeightProfiles');
       localStorage.removeItem('scoringWeights');
       window.location.reload();
     }
@@ -451,8 +470,24 @@ export default function App() {
 
   const handleWeightsCalculated = (newWeights) => {
     if (newWeights) {
+      // Set the active weights for the session
       setWeights(newWeights);
+
+      // Create a new profile object with a name and timestamp
+      const newProfile = {
+        id: Date.now(),
+        name: `Profile - ${new Date().toLocaleString()}`,
+        weights: newWeights,
+      };
+
+      // Add the new profile to the list, keeping only the 5 most recent
+      setSavedProfiles(prev => [newProfile, ...prev].slice(0, 5));
     }
+    setIsCalculatorOpen(false);
+  };
+
+  const handleLoadProfile = (profileWeights) => {
+    setWeights(profileWeights);
     setIsCalculatorOpen(false);
   };
   const nextCategory = () => {
@@ -566,6 +601,8 @@ export default function App() {
                 <WeightCalculator 
                     onWeightsCalculated={handleWeightsCalculated}
                     onClose={() => setIsCalculatorOpen(false)}
+                    savedProfiles={savedProfiles}
+                    onLoadProfile={handleLoadProfile}
                 />
             </div>
         )}
