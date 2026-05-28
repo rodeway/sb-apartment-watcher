@@ -495,6 +495,14 @@ export default function WeightCalculator({ onWeightsCalculated, onClose, savedPr
               >
                 Restart Survey
               </button>
+              {savedProfiles && savedProfiles.length > 0 && (
+                <button
+                  onClick={() => setShowProfiles(true)}
+                  className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm"
+                >
+                  Load Saved Profile
+                </button>
+              )}
             </div>
             <div className="flex items-center justify-center gap-4 pt-2">
                 <button onClick={onClose} className="text-sm font-medium text-slate-400 py-2.5 px-5 rounded-xl hover:text-white">Cancel</button>
