@@ -128,7 +128,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     }
   }, [step, isDirectEdit, isTieredEdit, calculateWeights]);
 
-  const handleDirectWeightChange = (keyToChange, newValue) => {
+  const handleDirectWeightChange = useCallback((keyToChange, newValue) => {
     let val = Math.max(0, Math.min(400, parseInt(newValue) || 0));
     const oldVal = weights[keyToChange];
     let delta = val - oldVal;
@@ -164,10 +164,10 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     }
 
     setWeights(newWeights);
-  };
+  }, [weights]);
 
   // Rank-Sum Math Engine for Tiered Ranking
-  const calculateTieredWeights = (list) => {
+  const calculateTieredWeights = useCallback((list) => {
     const N = list.length;
     const sumOfRanks = (N * (N + 1)) / 2; // Sum of 1 through 10 = 55
     let newWeights = {};
@@ -187,7 +187,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
       newWeights[list[0]] += diff; // Append any slight rounding remainder to the #1 priority
     }
     setWeights(newWeights);
-  };
+  }, []);
 
   const startTieredEdit = () => {
     const sortedIds = Object.keys(weights).sort((a, b) => weights[b] - weights[a]);
@@ -196,7 +196,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     calculateTieredWeights(sortedIds); // Apply the math immediately
   };
 
-  const moveTierItem = (index, direction) => {
+  const moveTierItem = useCallback((index, direction) => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === orderedList.length - 1) return;
 
@@ -207,7 +207,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
 
     setOrderedList(newList);
     calculateTieredWeights(newList); // Recalculate 400 points based on new order
-  };
+  }, [orderedList, calculateTieredWeights]);
 
   const handleSliderChange = (e, id) => {
     setAnswers({
@@ -292,7 +292,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
 
           <div className="flex justify-center pt-6 border-t border-slate-700 mt-6">
              <button 
-                onClick={() => { setIsDirectEdit(false); calculateWeights(); }}
+                onClick={() => setIsDirectEdit(false)}
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-8 rounded-xl transition-colors duration-200 shadow-lg shadow-blue-500/30 w-full md:w-auto"
               >
                 Lock & View Results
@@ -366,7 +366,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div className="space-y-4">
               <h3 className="font-semibold text-slate-300 border-b border-slate-700 pb-2">Weight Distribution</h3>
-              <div className="max-h-[300px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+              <div className="max-h-[350px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                 {Object.entries(sortedWeights).map(([key, value]) => {
                   const q = QUESTIONS.find(q => q.id === key);
                   const displayLabel = q ? q.sliderLabel : key;
@@ -380,7 +380,6 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
                       <div className="h-2 w-full bg-slate-700 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-blue-500 rounded-full transition-all duration-300" 
-                          // Correctly calculate width as a percentage of the 400 total points
                           style={{ width: `${(value / 400) * 100}%` }} 
                         ></div>
                       </div>
@@ -395,7 +394,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
                 <span className="text-xs text-slate-500 font-mono">weights.json (400 Scale)</span>
                 <button 
                   onClick={copyToClipboard}
-                  className={`text-xs px-3 py-1.5 rounded transition font-medium ${copied ? 'bg-green-500/20 text-green-400' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'}`}
+                  className={`text-xs px-3 py-1.5 rounded transition font-medium ${copied ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'}`}
                 >
                   {copied ? 'Copied!' : 'Copy JSON'}
                 </button>
@@ -406,7 +405,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-700">
+          <div className="pt-6 border-t border-slate-700 space-y-4">
             <div className="flex flex-wrap justify-center gap-3">
              <button
                 onClick={() => setIsDirectEdit(true)}
@@ -414,7 +413,10 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
               >
                 Fine-Tune Sliders
               </button>
-              <button onClick={startTieredEdit} className="bg-blue-900/50 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 hover:text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm flex items-center gap-2">
+              <button 
+                onClick={startTieredEdit}
+                className="bg-blue-900/50 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 hover:text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm flex items-center gap-2"
+              >
                 Rank by Tiers
               </button>
              <button
@@ -424,7 +426,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
                 Restart Survey
               </button>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center gap-4 pt-2">
                 <button onClick={onClose} className="text-sm font-medium text-slate-400 py-2.5 px-5 rounded-xl hover:text-white">Cancel</button>
                 <button onClick={() => onWeightsCalculated(weights)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-6 rounded-xl transition-colors duration-200 shadow-lg shadow-emerald-500/30">
                     Save & Use Weights
