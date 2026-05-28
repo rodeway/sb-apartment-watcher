@@ -208,52 +208,6 @@ export default function App() {
     }
   }, [showWeightConfirmation]);
 
-  // Effect to automatically archive/restore apartments based on guillotine criteria
-  useEffect(() => {
-    const allKnownApartments = [...apartments, ...archivedApartments];
-    const newActive = [];
-    const newArchived = [];
-
-    if (allKnownApartments.length === 0) return;
-
-    allKnownApartments.forEach(apt => {
-      const { dealbreakers } = calculateScore(apt);
-      if (dealbreakers.length > 0) {
-        newArchived.push(apt);
-      } else {
-        newActive.push(apt);
-      }
-    });
-
-    // To break the infinite loop, we must check if the content of the lists has actually changed
-    // before setting the state. We do this by comparing sorted lists of apartment IDs.
-    const newActiveIds = newActive.map(a => a.id).sort((a, b) => a - b).join(',');
-    const currentActiveIds = apartments.map(a => a.id).sort((a, b) => a - b).join(',');
-    const newArchivedIds = newArchived.map(a => a.id).sort((a, b) => a - b).join(',');
-    const currentArchivedIds = archivedApartments.map(a => a.id).sort((a, b) => a - b).join(',');
-    // before setting the state. A robust way to do this is to compare Sets of IDs,
-    // which is not dependent on array order.
-    const newActiveIdSet = new Set(newActive.map(a => a.id));
-    const currentActiveIdSet = new Set(apartments.map(a => a.id));
-    const newArchivedIdSet = new Set(newArchived.map(a => a.id));
-    const currentArchivedIdSet = new Set(archivedApartments.map(a => a.id));
-
-    if (newActiveIds !== currentActiveIds || newArchivedIds !== currentArchivedIds) {
-    
-    const areSetsEqual = (setA, setB) => {
-      if (setA.size !== setB.size) return false;
-      for (const item of setA) {
-        if (!setB.has(item)) return false;
-      }
-      return true;
-    };
-
-    if (!areSetsEqual(newActiveIdSet, currentActiveIdSet) || !areSetsEqual(newArchivedIdSet, currentArchivedIdSet)) {
-      setApartments(newActive);
-      setArchivedApartments(newArchived);
-    }
-  }, [apartments, archivedApartments, guillotineCriteria, calculateScore]);
-
   useEffect(() => {
     const fetchNewApartments = async () => {
       try {
