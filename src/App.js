@@ -130,6 +130,7 @@ export default function App() {
       return [];
     }
   });
+  const [showWeightConfirmation, setShowWeightConfirmation] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -178,6 +179,16 @@ export default function App() {
       console.error("Failed to save weight profiles to localStorage", error);
     }
   }, [savedProfiles]);
+
+  // Effect to auto-hide the weight confirmation dialog
+  useEffect(() => {
+    if (showWeightConfirmation) {
+      const timer = setTimeout(() => {
+        setShowWeightConfirmation(false);
+      }, 2000); // Disappears after 2 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [showWeightConfirmation]);
 
   useEffect(() => {
     const fetchNewApartments = async () => {
@@ -482,6 +493,7 @@ export default function App() {
 
       // Add the new profile to the list, keeping only the 5 most recent
       setSavedProfiles(prev => [newProfile, ...prev].slice(0, 5));
+      setShowWeightConfirmation(true); // Trigger confirmation dialog
     }
     setIsCalculatorOpen(false);
   };
@@ -529,6 +541,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans p-4 md:p-8 relative">
+      {showWeightConfirmation && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg z-[100] flex items-center gap-3 animate-fade-in-down">
+          <CheckCircle2 size={20} className="text-emerald-400" />
+          <span className="font-medium">New weights accepted.</span>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto">
         <header className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
