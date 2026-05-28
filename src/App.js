@@ -227,10 +227,10 @@ export default function App() {
 
     // To break the infinite loop, we must check if the content of the lists has actually changed
     // before setting the state. We do this by comparing sorted lists of apartment IDs.
-    const newActiveIds = newActive.map(a => a.id).sort().join(',');
-    const currentActiveIds = apartments.map(a => a.id).sort().join(',');
-    const newArchivedIds = newArchived.map(a => a.id).sort().join(',');
-    const currentArchivedIds = archivedApartments.map(a => a.id).sort().join(',');
+    const newActiveIds = newActive.map(a => a.id).sort((a, b) => a - b).join(',');
+    const currentActiveIds = apartments.map(a => a.id).sort((a, b) => a - b).join(',');
+    const newArchivedIds = newArchived.map(a => a.id).sort((a, b) => a - b).join(',');
+    const currentArchivedIds = archivedApartments.map(a => a.id).sort((a, b) => a - b).join(',');
 
     if (newActiveIds !== currentActiveIds || newArchivedIds !== currentArchivedIds) {
       setApartments(newActive);
