@@ -210,36 +210,29 @@ export default function App() {
 
   // Effect to automatically archive/restore apartments based on guillotine criteria
   useEffect(() => {
-    const activeToArchive = [];
-    const archivedToRestore = [];
+    const allKnownApartments = [...apartments, ...archivedApartments];
+    const newActive = [];
+    const newArchived = [];
 
-    // Check active apartments to see if they should be archived
-    apartments.forEach(apt => {
+    if (allKnownApartments.length === 0) return;
+
+    allKnownApartments.forEach(apt => {
       const { dealbreakers } = calculateScore(apt);
       if (dealbreakers.length > 0) {
-        activeToArchive.push(apt.id);
+        newArchived.push(apt);
+      } else {
+        newActive.push(apt);
       }
     });
 
-    // Check archived apartments to see if they should be restored
-    archivedApartments.forEach(apt => {
-      const { dealbreakers } = calculateScore(apt);
-      if (dealbreakers.length === 0) {
-        archivedToRestore.push(apt.id);
-      }
-    });
+    // To break the infinite loop, we must check if the content of the lists has actually changed
+    // before setting the state. We do this by comparing sorted lists of apartment IDs.
+    const newActiveIds = newActive.map(a => a.id).sort().join(',');
+    const currentActiveIds = apartments.map(a => a.id).sort().join(',');
+    const newArchivedIds = newArchived.map(a => a.id).sort().join(',');
+    const currentArchivedIds = archivedApartments.map(a => a.id).sort().join(',');
 
-    // If there are changes to be made, update the state in one go to avoid infinite loops
-    if (activeToArchive.length > 0 || archivedToRestore.length > 0) {
-      const newActive = [
-        ...apartments.filter(a => !activeToArchive.includes(a.id)),
-        ...archivedApartments.filter(a => archivedToRestore.includes(a.id))
-      ];
-      const newArchived = [
-        ...archivedApartments.filter(a => !archivedToRestore.includes(a.id)),
-        ...apartments.filter(a => activeToArchive.includes(a.id))
-      ];
-
+    if (newActiveIds !== currentActiveIds || newArchivedIds !== currentArchivedIds) {
       setApartments(newActive);
       setArchivedApartments(newArchived);
     }
