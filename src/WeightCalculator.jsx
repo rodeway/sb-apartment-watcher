@@ -239,8 +239,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
 
   if (step === -1) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans text-slate-100">
-        <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl p-8 text-center border border-slate-700">
+      <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl p-8 text-center border border-slate-700 my-auto">
           <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
           </div>
@@ -257,15 +256,13 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
           <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 mt-6">
             Cancel
           </button>
-        </div>
       </div>
     );
   }
 
   if (step === QUESTIONS.length && isDirectEdit) { // 2. Direct Slider Screen
     return ( 
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans text-slate-100 py-12">
-        <div className="max-w-4xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 border border-slate-700">
+      <div className="max-w-4xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 border border-slate-700">
           <div className="text-center mb-6">
             <h2 className="text-2xl font-bold text-white mb-2">Fine-Tune Weights</h2>
             <p className="text-slate-400 text-sm">Drag any slider. The engine proportionally adjusts all others to guarantee exactly 400 total points.</p>
@@ -298,15 +295,13 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
                 Lock & View Results
               </button>
           </div>
-        </div>
       </div>
     );
   }
   
   if (step === QUESTIONS.length && isTieredEdit) { // 3. Tiered Ranking Screen
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans text-slate-100 py-12">
-        <div className="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 border border-slate-700">
+      <div className="max-w-2xl w-full bg-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 border border-slate-700">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-white mb-2">Rank by Tier</h2>
             <p className="text-slate-400 text-sm">Move your highest priorities to the top. The math engine automatically distributes 400 points using a Rank-Sum formula.</p>
@@ -346,9 +341,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
              <button onClick={() => setIsTieredEdit(false)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-colors duration-200 shadow-lg shadow-emerald-500/30 w-full md:w-auto">
                 Lock Tiered Distribution
               </button>
-          </div>
-        </div>
-      </div>
+          </div></div>
     );
   }
 
@@ -358,9 +351,9 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
     );
 
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans text-slate-100 py-12">
+      <>
         <div className="max-w-3xl w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700">
-          <h2 className="text-2xl font-bold text-white mb-2 text-center">v9.1 Scorecard Architecture</h2>
+          <h2 className="text-2xl font-bold text-white mb-2 text-center">v9.2 Scorecard Architecture</h2>
           &lt;p className="text-slate-400 text-center mb-8 text-sm"&gt;Mathematically normalized to exactly 400 total points.&lt;/p&gt;
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -435,12 +428,9 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
           </div>
         </div>
         <style dangerouslySetInnerHTML={{__html: `
-          .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+          /* Custom scrollbar styles are no longer needed here as the parent controls scrolling */
         `}} />
-      </div>
+      </>
     );
   }
 
@@ -448,8 +438,7 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
   const progress = ((step) / QUESTIONS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans text-slate-100">
-      <div className="max-w-lg w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+    <div className="max-w-lg w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700 my-auto">
         
         <div className="h-1.5 w-full bg-slate-700">
           <div 
@@ -503,7 +492,6 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
             </button>
           </div>
         </div>
-      </div>
     </div>
   );
 }

@@ -562,7 +562,7 @@ export default function App() {
         )}
 
         {isCalculatorOpen && (
-            <div className="fixed inset-0 z-50 bg-slate-900 overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-slate-900 overflow-y-auto p-4 py-12 flex justify-center">
                 <WeightCalculator 
                     onWeightsCalculated={handleWeightsCalculated}
                     onClose={() => setIsCalculatorOpen(false)}
