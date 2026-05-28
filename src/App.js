@@ -239,6 +239,7 @@ export default function App() {
     const currentArchivedIdSet = new Set(archivedApartments.map(a => a.id));
 
     if (newActiveIds !== currentActiveIds || newArchivedIds !== currentArchivedIds) {
+    
     const areSetsEqual = (setA, setB) => {
       if (setA.size !== setB.size) return false;
       for (const item of setA) {
