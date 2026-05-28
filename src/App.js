@@ -589,43 +589,37 @@ export default function App() {
         return;
     }
 
-    let updatedApartments = [...apartments];
-    let updatedArchived = [...archivedApartments];
+    const updatesMap = new Map();
 
     for (let i = 0; i < apartmentsToUpdate.length; i++) {
         const apt = apartmentsToUpdate[i];
         setCommuteFetchStatus(`Fetching for "${apt.address}"... (${i + 1} of ${apartmentsToUpdate.length})`);
 
         try {
-            const response = await fetch('/api/get-commute-times', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ address: apt.address }),
-            });
+          const response = await fetch('/api/get-commute-times', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address: apt.address }),
+          });
 
-            if (!response.ok) {
-                console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
-                continue; // Skip to the next one
-            }
+          if (!response.ok) {
+              console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+              continue; // Skip to the next one
+          }
 
-            const newTimes = await response.json();
+          const newTimes = await response.json();
+          updatesMap.set(apt.id, newTimes);
 
-            const activeIndex = updatedApartments.findIndex(a => a.id === apt.id);
-            if (activeIndex !== -1) {
-                updatedApartments[activeIndex] = { ...updatedApartments[activeIndex], ...newTimes };
-            } else {
-                const archivedIndex = updatedArchived.findIndex(a => a.id === apt.id);
-                if (archivedIndex !== -1) {
-                    updatedArchived[archivedIndex] = { ...updatedArchived[archivedIndex], ...newTimes };
-                }
-            }
         } catch (error) {
             console.error(`Error fetching commute for ${apt.address}:`, error);
         }
     }
 
-    setApartments(updatedApartments);
-    setArchivedApartments(updatedArchived);
+    // Use a functional update to ensure we're updating based on the latest state
+    // and to guarantee a re-render.
+    setApartments(prevApts => prevApts.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
+    setArchivedApartments(prevArchived => prevArchived.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
+
     setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
     setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
   };
