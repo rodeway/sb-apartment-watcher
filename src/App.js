@@ -146,6 +146,14 @@ export default function App() {
   const [parseError, setParseError] = useState('');
   const [screenshotFile, setScreenshotFile] = useState(null);
   const [selectedManager, setSelectedManager] = useState('All');
+  const [seenAptIds, setSeenAptIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('seenApartmentIds');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingAptId, setRecordingAptId] = useState(null);
@@ -209,11 +217,40 @@ export default function App() {
     }
   }, [showWeightConfirmation]);
 
+  // Effect to "mark as seen" any new apartments that have been displayed.
+  // This runs after a render and updates localStorage for the next session.
+  useEffect(() => {
+    const newIdsOnDisplay = apartments.filter(apt => apt.isNew).map(apt => apt.id);
+
+    if (newIdsOnDisplay.length > 0) {
+      const updatedSeenIds = new Set(seenAptIds);
+      let hasChanges = false;
+      newIdsOnDisplay.forEach(id => {
+        if (!updatedSeenIds.has(id)) {
+          updatedSeenIds.add(id);
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+        setSeenAptIds(updatedSeenIds);
+        try {
+          localStorage.setItem('seenApartmentIds', JSON.stringify(Array.from(updatedSeenIds)));
+        } catch (error) {
+          console.error("Failed to save seen apartment IDs to localStorage", error);
+        }
+      }
+    }
+  }, [apartments, seenAptIds]);
+
   // This master effect runs on mount to sync data from the backend and merge any new scrapes.
   useEffect(() => {
     const syncAndFetch = async () => {
       setIsLoading(true);
       let serverState;
+
+      const savedSeenIds = localStorage.getItem('seenApartmentIds');
+      const localSeenIds = savedSeenIds ? new Set(JSON.parse(savedSeenIds)) : new Set();
 
       // 1. Try to fetch the master state from the backend (Vercel KV).
       try {
@@ -239,7 +276,12 @@ export default function App() {
           const newApts = await response.json();
           if (newApts && newApts.length > 0) {
               const allKnownIds = new Set([...currentApts.map(a => a.id), ...currentArchived.map(a => a.id)]);
-              const filteredNewApts = newApts.filter(a => !allKnownIds.has(a.id));
+              const filteredNewApts = newApts
+                .filter(a => !allKnownIds.has(a.id))
+                .map(apt => ({
+                    ...apt,
+                    isNew: !localSeenIds.has(apt.id)
+                }));
               if (filteredNewApts.length > 0) {
                   console.log(`Merging ${filteredNewApts.length} newly scraped apartments.`);
                   currentApts = [...currentApts, ...filteredNewApts];
@@ -446,6 +488,7 @@ export default function App() {
       localStorage.removeItem('guillotineCriteria');
       localStorage.removeItem('savedWeightProfiles');
       localStorage.removeItem('scoringWeights');
+      localStorage.removeItem('seenApartmentIds');
       window.location.reload();
     }
   };
@@ -868,7 +911,7 @@ export default function App() {
             {/* Card View for Mobile */}
             <div className="grid grid-cols-1 md:hidden gap-6">
               {apartmentsToDisplay.map((apt, index) => (
-                <div key={`card-${apt.id}`} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'}`}>
+                <div key={`card-${apt.id}`} className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-lg hover:-translate-y-1 border-slate-200'} ${apt.isNew ? 'ring-2 ring-blue-500' : ''}`}>
                   <div className="p-5 border-b border-slate-200 flex justify-between items-start">
                       <div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>Rank #{index + 1}</span>
@@ -928,7 +971,7 @@ export default function App() {
                 <span className="text-center">Actions</span>
               </div>
               {apartmentsToDisplay.map((apt, index) => (
-                <div key={`row-${apt.id}`} className={`grid grid-cols-[2.5fr,0.8fr,3fr,1.5fr,2.5fr,0.7fr] gap-x-6 items-start bg-white rounded-lg shadow-sm border p-4 transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-md hover:border-slate-300 border-slate-200'}`}>
+                <div key={`row-${apt.id}`} className={`grid grid-cols-[2.5fr,0.8fr,3fr,1.5fr,2.5fr,0.7fr] gap-x-6 items-start bg-white rounded-lg shadow-sm border p-4 transition-all duration-300 ${apt.calculated.dealbreakers.length > 0 ? 'border-rose-300 bg-rose-50/60' : 'hover:shadow-md hover:border-slate-300 border-slate-200'} ${apt.isNew ? 'ring-2 ring-blue-500' : ''}`}>
                   {/* Col 1: Vitals */}
                   <div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${index < 3 ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600'}`}>#{index + 1}</span>
