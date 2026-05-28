@@ -145,6 +145,7 @@ export default function App() {
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState('');
   const [screenshotFile, setScreenshotFile] = useState(null);
+  const [selectedManager, setSelectedManager] = useState('All');
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingAptId, setRecordingAptId] = useState(null);
@@ -367,13 +368,25 @@ export default function App() {
     return { score, dealbreakers };
   }, [weights, guillotineCriteria]);
 
+  const uniqueManagers = useMemo(() => {
+    const allApts = [...apartments, ...archivedApartments];
+    const managers = new Set(allApts.map(apt => apt.manager).filter(Boolean));
+    return ['All', ...Array.from(managers).sort()];
+  }, [apartments, archivedApartments]);
+
   const sortedApartments = useMemo(() => {
-    return [...apartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
-  }, [apartments, calculateScore]);
+    const filtered = apartments.filter(apt => 
+        selectedManager === 'All' || apt.manager === selectedManager
+    );
+    return filtered.map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
+  }, [apartments, calculateScore, selectedManager]);
 
   const sortedArchivedApartments = useMemo(() => {
-    return [...archivedApartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
-  }, [archivedApartments, calculateScore]);
+    const filtered = archivedApartments.filter(apt => 
+        selectedManager === 'All' || apt.manager === selectedManager
+    );
+    return filtered.map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
+  }, [archivedApartments, calculateScore, selectedManager]);
 
   const handleSave = () => {
     const newApt = {
@@ -624,6 +637,19 @@ export default function App() {
                   {showArchived ? <CheckCircle2 size={16} /> : <Archive size={16} />}
                   {showArchived ? 'View Active' : `View Archived (${archivedApartments.length})`}
               </button>
+            )}
+            {uniqueManagers.length > 2 && (
+              <select
+                  value={selectedManager}
+                  onChange={e => setSelectedManager(e.target.value)}
+                  className="text-sm font-medium text-slate-700 bg-white border-slate-300 border rounded-xl py-2.5 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              >
+                  {uniqueManagers.map(manager => (
+                      <option key={manager} value={manager}>
+                          {manager === 'All' ? 'All Managers' : manager}
+                      </option>
+                  ))}
+              </select>
             )}
             <button onClick={() => setIsGuillotineMenuOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
                 <ShieldAlert size={16} />
