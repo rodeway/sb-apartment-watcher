@@ -330,9 +330,9 @@ export default function WeightCalculator({ onWeightsCalculated, onClose, savedPr
             </button>
           </div>
 
-          <button onClick={onClose} className="text-sm text-slate-400 hover:text-slate-200 mt-8">
-            Cancel
-          </button>
+          <div className="pt-8 mt-8 border-t border-slate-700">
+            <button onClick={onClose} className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Back to Rankings</button>
+          </div>
       </div>
     );
   }
