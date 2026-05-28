@@ -10,6 +10,9 @@ on:
         description: 'Optional URL to scrape instead of the default'
         required: false
         default: 'https://www.bartlein.com/wp-content/uploads/2021/07/SBList.pdf'
+      scrape_id:
+        description: 'A unique ID for the on-demand scrape job'
+        required: false
 
 jobs:
   build-and-deploy:
@@ -40,6 +43,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
           SCRAPE_URL: ${{ github.event.inputs.scrape_url }}
+          SCRAPE_ID: ${{ github.event.inputs.scrape_id }}
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python bartlein_watcher.py
         

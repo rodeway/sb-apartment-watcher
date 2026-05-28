@@ -1,5 +1,6 @@
 // This is a Vercel Serverless Function that acts as a secure bridge.
 // It receives a request from the frontend and triggers the GitHub Actions workflow.
+import { randomUUID } from 'crypto';
 
 export default async function handler(request, response) {
   // Only allow POST requests
@@ -13,6 +14,7 @@ export default async function handler(request, response) {
     return response.status(400).json({ message: 'scrape_url is required' });
   }
 
+  const scrapeId = randomUUID();
   // These values should be configured in your Vercel project's Environment Variables
   const GITHUB_TOKEN = process.env.GITHUB_PAT;
   const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER;
@@ -96,6 +98,7 @@ export default async function handler(request, response) {
         ref: 'main', // Or your default branch
         inputs: {
           scrape_url: scrape_url,
+          scrape_id: scrapeId,
         },
       }),
     });
@@ -106,7 +109,7 @@ export default async function handler(request, response) {
       throw new Error(`GitHub API responded with ${dispatchResponse.status}. Check function logs on Vercel for details.`);
     }
 
-    return response.status(202).json({ message: 'Workflow triggered successfully!' });
+    return response.status(202).json({ message: 'Workflow triggered successfully!', scrapeId: scrapeId });
   } catch (error) {
     console.error('Error triggering GitHub workflow:', error);
     const detail = error.cause ? ` (Cause: ${error.cause})` : '';

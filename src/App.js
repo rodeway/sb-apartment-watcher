@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import WeightCalculator from './WeightCalculator';
 
 // This is your original list of apartments, now serving as the manual/static data source.
 const MANUAL_DATA = [
@@ -57,6 +58,13 @@ const INITIAL_SCORING = {
   ]
 };
 
+const INITIAL_WEIGHTS = {
+  bathroom: 50, sqft: 50, neighborhood: 50, parking: 50, hospital: 50,
+  flooring: 30, storage: 30, amtrak: 30, laundry: 30, dishwasher: 30
+};
+
+const MAX_SCORE = 400;
+
 const FeatureTag = ({ icon, text, color = 'slate' }) => {
     const colorClasses = {
         green: 'bg-green-100 text-green-800',
@@ -85,13 +93,13 @@ export default function App() {
       return MANUAL_DATA;
     }
   });
-  const [scoring, setScoring] = useState(() => {
+  const [weights, setWeights] = useState(() => {
     try {
-      const savedScoring = localStorage.getItem('scoringWeights');
-      return savedScoring ? JSON.parse(savedScoring) : INITIAL_SCORING;
+      const savedWeights = localStorage.getItem('scoringWeights400');
+      return savedWeights ? JSON.parse(savedWeights) : INITIAL_WEIGHTS;
     } catch (error) {
       console.error("Failed to parse scoring weights from localStorage", error);
-      return INITIAL_SCORING;
+      return INITIAL_WEIGHTS;
     }
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -103,7 +111,7 @@ export default function App() {
   const [isTriggeringScrape, setIsTriggeringScrape] = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState('');
   const [isScrapeDialogOpen, setIsScrapeDialogOpen] = useState(false);
-  const [isWeightsDialogOpen, setIsWeightsDialogOpen] = useState(false);
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [archivedApartments, setArchivedApartments] = useState(() => {
     try {
       const savedArchived = localStorage.getItem('archivedApartments');
@@ -144,14 +152,14 @@ export default function App() {
     }
   }, [archivedApartments]);
 
-  // Effect to save scoring weights to localStorage whenever they change
+  // Effect to save weights to localStorage whenever they change
   useEffect(() => {
     try {
-      localStorage.setItem('scoringWeights', JSON.stringify(scoring));
+      localStorage.setItem('scoringWeights400', JSON.stringify(weights));
     } catch (error) {
       console.error("Failed to save scoring weights to localStorage", error);
     }
-  }, [scoring]);
+  }, [weights]);
 
   useEffect(() => {
     const fetchNewApartments = async () => {
@@ -229,35 +237,50 @@ export default function App() {
     flooring: -1, storage: -1, amtrak: -1, laundry: -1, dishwasher: -1
   };
   const [formData, setFormData] = useState(defaultForm);
-
-  const calculateScore = (apt) => {
+  
+  const calculateScore = useCallback((apt) => {
     let score = 0;
     let dealbreakers = [];
-    const keys = Object.keys(scoring);
-    keys.forEach(k => {
-      if (apt[k] !== undefined && k !== 'bathroom' && apt[k] !== -1) score += apt[k];
-    });
-    if (apt.bathroom !== -1 && apt.bathroom !== undefined) score += apt.bathroom;
+
+    const getMaxScore = (category) => {
+        if (!INITIAL_SCORING[category]) return 0;
+        const values = INITIAL_SCORING[category].map(o => o.value).filter(v => v > 0);
+        return Math.max(...values, 0);
+    };
+
+    for (const key in weights) {
+        if (Object.hasOwnProperty.call(weights, key)) {
+            const weight = weights[key];
+            const aptScore = apt[key];
+            const maxScore = getMaxScore(key);
+
+            if (aptScore !== undefined && aptScore >= 0 && maxScore > 0) {
+                const normalizedScore = aptScore / maxScore;
+                score += normalizedScore * weight;
+            }
+        }
+    }
+
     if (apt.guillotine) {
         score += apt.guillotine;
     }
+    
+    score = Math.round(score);
 
     if (apt.sqft === 0 && apt.storage === 0) dealbreakers.push("Micro-Unit (<550 sqft) without dedicated storage");
     if (apt.laundry === -100) dealbreakers.push("No laundry on site");
     if (apt.parking === 0) dealbreakers.push("Street parking only");
-    if (apt.guillotine === -1000) {
-        dealbreakers.unshift("Guillotine: Fails rent or bedroom criteria");
-    }
-    return { score: score, dealbreakers };
-  };
+    if (apt.guillotine === -1000) dealbreakers.unshift("Guillotine: Fails rent or bedroom criteria");
+    return { score, dealbreakers };
+  }, [weights]);
 
   const sortedApartments = useMemo(() => {
     return [...apartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
-  }, [apartments, scoring]);
+  }, [apartments, calculateScore]);
 
   const sortedArchivedApartments = useMemo(() => {
     return [...archivedApartments].map(apt => ({ ...apt, calculated: calculateScore(apt) })).sort((a, b) => b.calculated.score - a.calculated.score);
-  }, [archivedApartments, scoring]);
+  }, [archivedApartments, calculateScore]);
 
   const handleSave = () => {
     const newApt = {
@@ -313,6 +336,7 @@ export default function App() {
       localStorage.removeItem('apartments');
       localStorage.removeItem('archivedApartments');
       localStorage.removeItem('geminiApiKey');
+      localStorage.removeItem('scoringWeights400');
       localStorage.removeItem('scoringWeights');
       window.location.reload();
     }
@@ -425,23 +449,12 @@ export default function App() {
     }
   };
 
-  const handleWeightChange = (category, index, newValue) => {
-    setScoring(prevScoring => {
-      // Create a new top-level object
-      const newScoring = { ...prevScoring };
-      // Create a new array for the category being changed
-      const newOptions = [...newScoring[category]];
-      // Create a new object for the option being changed
-      newOptions[index] = { ...newOptions[index], value: parseInt(newValue, 10) || 0 };
-      // Assign the new array back to the new object
-      newScoring[category] = newOptions;
-      return newScoring;
-    });
+  const handleWeightsCalculated = (newWeights) => {
+    if (newWeights) {
+      setWeights(newWeights);
+    }
+    setIsCalculatorOpen(false);
   };
-  const handleAddCategory = () => {
-    // New category logic remains the same
-  };
-
   const nextCategory = () => {
     // New category logic remains the same
   };
@@ -464,7 +477,7 @@ export default function App() {
 
   const renderFeatureTags = useCallback((apt) => {
       const tags = [];
-      const sqftLabel = scoring.sqft.find(s => s.value === apt.sqft)?.label.split('(')[0].trim();
+      const sqftLabel = INITIAL_SCORING.sqft.find(s => s.value === apt.sqft)?.label.split('(')[0].trim();
       if (sqftLabel && apt.sqft > 0) tags.push(<FeatureTag key="sqft" icon={<Ruler size={14} />} text={sqftLabel} />);
       if (apt.laundry === 10) tags.push(<FeatureTag key="laundry" icon={<WashingMachine size={14} />} text="In-Unit W/D" color="green" />);
       if (apt.laundry === 0) tags.push(<FeatureTag key="laundry-shared" icon={<WashingMachine size={14} />} text="On-Site Laundry" />);
@@ -475,7 +488,7 @@ export default function App() {
       if (apt.flooring === 5) tags.push(<FeatureTag key="flooring-carpet" icon={<Ban size={14} />} text="Carpet" color="amber" />);
       if (apt.storage === 10) tags.push(<FeatureTag key="storage" icon={<CheckCircle2 size={14} />} text="Has Storage" />);
       return tags;
-  }, [scoring]);
+  }, []);
 
   const apartmentsToDisplay = showArchived ? sortedArchivedApartments : sortedApartments;
 
@@ -494,7 +507,7 @@ export default function App() {
                   {showArchived ? 'View Active' : `View Archived (${archivedApartments.length})`}
               </button>
             )}
-            <button onClick={() => setIsWeightsDialogOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
+            <button onClick={() => setIsCalculatorOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100">
                 <SlidersHorizontal size={16} />
                 Adjust Weights
             </button>
@@ -548,37 +561,12 @@ export default function App() {
             </div>
         )}
 
-        {isWeightsDialogOpen && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsWeightsDialogOpen(false)}>
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center p-6 border-b border-slate-200">
-                        <h2 className="text-xl font-bold">Adjust Scoring Weights</h2>
-                        <button onClick={() => setScoring(INITIAL_SCORING)} className="text-sm font-medium text-rose-500 hover:text-rose-700">Reset to Defaults</button>
-                    </div>
-                    <div className="p-6 overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                            {Object.entries(scoring).map(([category, options]) => (
-                                <div key={category} className="space-y-2">
-                                    <h3 className="text-md font-bold text-slate-700 capitalize border-b pb-2 mb-3">{category}</h3>
-                                    {options.map((option, index) => (
-                                        <div key={`${category}-${index}`} className="flex items-center justify-between gap-4">
-                                            <label className="text-sm text-slate-600 flex-grow">{option.label.split('(')[0].trim()}</label>
-                                            <input
-                                                type="number"
-                                                value={option.value}
-                                                onChange={e => handleWeightChange(category, index, e.target.value)}
-                                                className="w-20 p-1 border border-slate-300 rounded-md text-center"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-4 mt-auto">
-                        <button onClick={() => setIsWeightsDialogOpen(false)} className="bg-indigo-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-indigo-700">Done</button>
-                    </div>
-                </div>
+        {isCalculatorOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-900">
+                <WeightCalculator 
+                    onWeightsCalculated={handleWeightsCalculated}
+                    onClose={() => setIsCalculatorOpen(false)}
+                />
             </div>
         )}
 
@@ -704,7 +692,7 @@ export default function App() {
                       <div className="flex-shrink-0 ml-4 text-center">
                           <div className="w-20 h-20 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner">
                               <span className="text-3xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
-                              <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
+                              <span className="text-xs text-slate-500 font-medium -mt-1">/ {MAX_SCORE}</span>
                           </div>
                       </div>
                   </div>
@@ -765,7 +753,7 @@ export default function App() {
                   <div className="flex-shrink-0 text-center">
                       <div className="w-16 h-16 bg-slate-100 rounded-full flex flex-col items-center justify-center border-4 border-white shadow-inner mx-auto">
                           <span className="text-2xl font-black tracking-tighter text-indigo-600">{apt.calculated.score}</span>
-                          <span className="text-xs text-slate-500 font-medium -mt-1">/ 155</span>
+                          <span className="text-xs text-slate-500 font-medium -mt-1">/ {MAX_SCORE}</span>
                       </div>
                   </div>
                   {/* Col 3: Features */}
