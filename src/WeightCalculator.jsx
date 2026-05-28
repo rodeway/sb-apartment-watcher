@@ -406,19 +406,30 @@ export default function WeightCalculator({ onWeightsCalculated, onClose }) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6 border-t border-slate-700">
-             <button 
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-slate-700">
+            <div className="flex flex-wrap justify-center gap-3">
+             <button
                 onClick={() => setIsDirectEdit(true)}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-6 py-2.5 rounded-xl transition-colors shadow-sm"
+                className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm"
               >
                 Fine-Tune Sliders
               </button>
-             <button 
-                onClick={reset}
-                className="text-slate-400 hover:text-white font-medium px-6 py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors"
-              >
-                Retake Questionnaire
+              <button onClick={startTieredEdit} className="bg-blue-900/50 hover:bg-blue-800/60 border border-blue-500/30 text-blue-300 hover:text-white font-medium px-5 py-2.5 rounded-xl transition-colors text-sm shadow-sm flex items-center gap-2">
+                Rank by Tiers
               </button>
+             <button
+                onClick={reset}
+                className="text-slate-400 hover:text-white font-medium px-5 py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors text-sm"
+              >
+                Restart Survey
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+                <button onClick={onClose} className="text-sm font-medium text-slate-400 py-2.5 px-5 rounded-xl hover:text-white">Cancel</button>
+                <button onClick={() => onWeightsCalculated(weights)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-6 rounded-xl transition-colors duration-200 shadow-lg shadow-emerald-500/30">
+                    Save & Use Weights
+                </button>
+            </div>
           </div>
         </div>
         <style dangerouslySetInnerHTML={{__html: `
