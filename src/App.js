@@ -243,7 +243,7 @@ export default function App() {
       setApartments(newActive);
       setArchivedApartments(newArchived);
     }
-  }, [apartments, archivedApartments, calculateScore]); // calculateScore is dependent on guillotineCriteria
+  }, [apartments, archivedApartments, guillotineCriteria, calculateScore]);
 
   useEffect(() => {
     const fetchNewApartments = async () => {
