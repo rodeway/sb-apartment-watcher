@@ -208,33 +208,67 @@ export default function App() {
     }
   }, [showWeightConfirmation]);
 
+  // This master effect runs on mount to sync data from the backend and merge any new scrapes.
   useEffect(() => {
-    const fetchNewApartments = async () => {
+    const syncAndFetch = async () => {
+      setIsLoading(true);
+      let serverState;
+
+      // 1. Try to fetch the master state from the backend (Vercel KV).
       try {
-        // This fetch request works because apartments.json will be in the `public` folder after a build.
-        const response = await fetch('/apartments.json');
+        const response = await fetch('/api/get-app-state');
         if (response.ok) {
-          const newApts = await response.json();
-          // Combine manual data with new data, ensuring no duplicate IDs
-          // This logic now correctly merges newly scraped data with your locally persisted data.
-          setApartments(prevApts => {
-            // If prevApts is empty (e.g., localStorage was cleared), start with MANUAL_DATA
-            const currentApts = prevApts.length > 0 ? prevApts : MANUAL_DATA;
-            const existingIds = new Set(prevApts.map(a => a.id));
-            const filteredNewApts = newApts.filter(a => !existingIds.has(a.id));
-            return [...prevApts, ...filteredNewApts];
-          });
+          serverState = await response.json();
+          console.log("Successfully fetched master state from backend.");
+        } else {
+          console.warn("Could not fetch master state, will rely on local data.");
         }
       } catch (error) {
-        console.error("Could not fetch new apartments:", error);
-        // It's okay to fail, we'll just show the manual data.
-      } finally {
-        setIsLoading(false);
+        console.error("Error fetching master state:", error);
       }
+
+      // 2. Use server state as the source of truth if available; otherwise, we're already using localStorage data from the useState initializer.
+      let currentApts = serverState?.apartments || apartments;
+      let currentArchived = serverState?.archivedApartments || archivedApartments;
+
+      // 3. Fetch newly scraped apartments from apartments.json (if any) and merge them in.
+      try {
+        const response = await fetch(`/apartments.json?t=${Date.now()}`); // cache-bust
+        if (response.ok) {
+          const newApts = await response.json();
+          if (newApts && newApts.length > 0) {
+              const allKnownIds = new Set([...currentApts.map(a => a.id), ...currentArchived.map(a => a.id)]);
+              const filteredNewApts = newApts.filter(a => !allKnownIds.has(a.id));
+              if (filteredNewApts.length > 0) {
+                  console.log(`Merging ${filteredNewApts.length} newly scraped apartments.`);
+                  currentApts = [...currentApts, ...filteredNewApts];
+              }
+          }
+        }
+      } catch (error) {
+        console.error("Could not fetch new apartments.json:", error);
+      }
+
+      // 4. Set the final state.
+      setApartments(currentApts);
+      setArchivedApartments(currentArchived);
+      setIsLoading(false);
     };
 
-    fetchNewApartments();
-  }, []); // The empty dependency array ensures this runs only once.
+    syncAndFetch();
+  }, []); // Run only on mount.
+
+  // This effect syncs the state back to the backend whenever apartments change.
+  useEffect(() => {
+    if (isLoading) return; // Don't save during initial load.
+
+    const handler = setTimeout(async () => {
+      console.log("Attempting to sync state to backend...");
+      await fetch('/api/set-app-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apartments, archivedApartments }) });
+    }, 1500); // Debounce for 1.5 seconds to avoid too many writes.
+
+    return () => clearTimeout(handler);
+  }, [apartments, archivedApartments, isLoading]);
 
   // Effect for polling scrape results
   useEffect(() => {
