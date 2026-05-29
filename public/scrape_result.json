@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-28T20:30:34Z",
+  "timestamp": "2026-05-29T21:29:40Z",
   "added_units": [
     {
       "address": "910 Bath St, Unit A"
@@ -21,6 +21,12 @@
     },
     {
       "address": "311 Ellwood Beach Dr, Unit 12"
+    },
+    {
+      "address": "1219 De La Vina St., Unit 1"
+    },
+    {
+      "address": "321 W Padre St, Unit 6"
     }
   ]
 }
