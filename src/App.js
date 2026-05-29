@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode, Map } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode, Map, X } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import WeightCalculator from './WeightCalculator';
 
@@ -160,6 +162,7 @@ export default function App() {
   const [processingAptId, setProcessingAptId] = useState(null);
   const [pendingCategories, setPendingCategories] = useState([]);
   const [activeAptIdForCategory, setActiveAptIdForCategory] = useState(null);
+  const isFetchingCommutesRef = useRef(false);
   const [isFetchingCommutes, setIsFetchingCommutes] = useState(false);
   const [commuteFetchStatus, setCommuteFetchStatus] = useState('');
   const [newCategoryWeight, setNewCategoryWeight] = useState(5);
@@ -575,6 +578,12 @@ export default function App() {
   };
 
   const handleFetchAllCommutes = useCallback(() => {
+  const handleFetchAllCommutes = () => {
+    if (isFetchingCommutesRef.current) {
+      console.warn("Commute fetch is already in progress.");
+      return;
+    }
+    isFetchingCommutesRef.current = true;
     setIsFetchingCommutes(true);
     setCommuteFetchStatus('Initializing...');
 
@@ -582,21 +591,35 @@ export default function App() {
       const allApartments = [...apartments, ...archivedApartments];
       const apartmentsToUpdate = allApartments.filter(
         (apt) => !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
+        (apt) => !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak,
       );
 
       if (apartmentsToUpdate.length === 0) {
         setCommuteFetchStatus('✅ All apartments have complete commute data.');
         setTimeout(() => setIsFetchingCommutes(false), 3000);
+        setTimeout(() => {
+          setIsFetchingCommutes(false);
+          isFetchingCommutesRef.current = false;
+        }, 3000);
         return;
       }
 
       const processApartmentAtIndex = async (index, updatesMap) => {
+        if (!isFetchingCommutesRef.current) {
+          console.log("Commute fetch was cancelled.");
+          return;
+        }
         if (index >= apartmentsToUpdate.length) {
           // Finished processing all, now update the state
           setApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
           setArchivedApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
           setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
           setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
+          setTimeout(() => {
+            setIsFetchingCommutes(false);
+            setCommuteFetchStatus('');
+            isFetchingCommutesRef.current = false;
+          }, 5000);
           return;
         }
 
@@ -615,8 +638,20 @@ export default function App() {
           } else {
             console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
           }
+            const response = await fetch('/api/get-commute-times', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: apt.address }),
+            });
+            if (response.ok) {
+                const newTimes = await response.json();
+                updatesMap.set(apt.id, newTimes);
+            } else {
+                console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+            }
         } catch (error) {
           console.error(`Error fetching commute for ${apt.address}:`, error);
+            console.error(`Error fetching commute for ${apt.address}:`, error);
         }
 
         // Schedule the next apartment to be processed, yielding to the event loop
@@ -627,6 +662,13 @@ export default function App() {
       processApartmentAtIndex(0, new Map());
     }, 100); // A small delay to allow the UI to update to "Initializing..."
   }, [apartments, archivedApartments]);
+  };
+
+  const cancelFetchCommutes = () => {
+    isFetchingCommutesRef.current = false;
+    setIsFetchingCommutes(false);
+    setCommuteFetchStatus('Cancelled by user.');
+  };
 
   const handleTriggerScrape = async () => {
     setIsTriggeringScrape(true);
@@ -778,6 +820,10 @@ export default function App() {
         {isFetchingCommutes && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center relative" onClick={e => e.stopPropagation()}>
+                    <button onClick={cancelFetchCommutes} className="absolute top-3 right-3 p-2 text-slate-400 hover:bg-slate-100 rounded-full">
+                        <X size={20} />
+                    </button>
                     <Loader2 size={40} className="animate-spin text-indigo-600 mx-auto" />
                     <h2 className="text-xl font-bold mt-4">Fetching Commute Times</h2>
                     <p className="text-slate-600 mt-2 min-h-[20px]">
