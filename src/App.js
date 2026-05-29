@@ -807,6 +807,7 @@ export default function App() {
                         {commuteFetchStatus}
                     </p>
                 </div>
+            </div>
         )}
 
         {isScrapeDialogOpen && (
