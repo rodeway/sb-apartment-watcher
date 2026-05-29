@@ -574,16 +574,14 @@ export default function App() {
     // Voice processing logic remains the same
   };
 
-  const handleFetchAllCommutes = () => {
+  const handleFetchAllCommutes = useCallback(() => {
     setIsFetchingCommutes(true);
     setCommuteFetchStatus('Initializing...');
 
-    // Use a brief timeout to ensure the "Initializing..." state renders before we start the heavy lifting.
-    // This prevents the UI from feeling frozen.
     setTimeout(() => {
       const allApartments = [...apartments, ...archivedApartments];
-      const apartmentsToUpdate = allApartments.filter(apt => 
-          !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
+      const apartmentsToUpdate = allApartments.filter(
+        (apt) => !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
       );
 
       if (apartmentsToUpdate.length === 0) {
@@ -592,21 +590,18 @@ export default function App() {
         return;
       }
 
-      const updatesMap = new Map();
-      let i = 0;
-
-      const processNextApartment = async () => {
-        if (i >= apartmentsToUpdate.length) {
-          // All done, apply updates in one go
-          setApartments(prevApts => prevApts.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
-          setArchivedApartments(prevArchived => prevArchived.map(apt => updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt));
+      const processApartmentAtIndex = async (index, updatesMap) => {
+        if (index >= apartmentsToUpdate.length) {
+          // Finished processing all, now update the state
+          setApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
+          setArchivedApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
           setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
           setTimeout(() => { setIsFetchingCommutes(false); setCommuteFetchStatus(''); }, 5000);
           return;
         }
 
-        const apt = apartmentsToUpdate[i];
-        setCommuteFetchStatus(`Fetching for "${apt.address}"... (${i + 1} of ${apartmentsToUpdate.length})`);
+        const apt = apartmentsToUpdate[index];
+        setCommuteFetchStatus(`Fetching for "${apt.address}"... (${index + 1} of ${apartmentsToUpdate.length})`);
 
         try {
           const response = await fetch('/api/get-commute-times', {
@@ -614,10 +609,9 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ address: apt.address }),
           });
-
           if (response.ok) {
             const newTimes = await response.json();
-            updatesMap.set(apt.id, newTimes);
+            updatesMap.set(apt.id, newTimes); // Mutating the map is fine here
           } else {
             console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
           }
@@ -625,15 +619,14 @@ export default function App() {
           console.error(`Error fetching commute for ${apt.address}:`, error);
         }
 
-        i++;
-        // Schedule the next iteration, yielding to the event loop
-        setTimeout(processNextApartment, 50);
+        // Schedule the next apartment to be processed, yielding to the event loop
+        setTimeout(() => processApartmentAtIndex(index + 1, updatesMap), 50);
       };
 
-      // Kick off the processing chain
-      processNextApartment();
+      // Kick off the processing chain with the initial index and an empty map
+      processApartmentAtIndex(0, new Map());
     }, 100); // A small delay to allow the UI to update to "Initializing..."
-  };
+  }, [apartments, archivedApartments]);
 
   const handleTriggerScrape = async () => {
     setIsTriggeringScrape(true);
