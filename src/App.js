@@ -1,20 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode, Map, X } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, MapPin, Ruler, Car, Ban, Plus, Trash2, Edit2, Info, Bike, WashingMachine, Mic, Loader2, ExternalLink, Utensils, Archive, ArchiveRestore, Sparkles, UploadCloud, SlidersHorizontal, SearchCode, Map as MapIcon, X } from 'lucide-react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import WeightCalculator from './WeightCalculator';
 
 // This is your original list of apartments, now serving as the manual/static data source.
-const MANUAL_DATA = [
-  { id: 42, address: '42 Broadmoor Plaza #5', manager: 'Sierra', listingUrl: 'https://sierrapropsb.com/residential/', zillowUrl: '', rent: 2850, neighborhood: 15, bathroom: 25, sqft: 25, parking: 20, hospital: 15, flooring: 10, storage: 10, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '6 min', bikeEastBeach: '22 min', bikeArroyoBurro: '16 min', bikeAmtrak: '15 min', notes: 'FRIDAY TOUR (Jovien): CURRENT #1 TARGET. Upstairs corner unit, exceptionally large bedroom, private balcony. Verify dishwasher.' },
-  { id: 32, address: '1720 De La Vina St #4', manager: 'Bartlein', listingUrl: 'https://bartlein.com/rentals.html', zillowUrl: '', rent: 2600, neighborhood: 20, bathroom: -1, sqft: 0, parking: 20, hospital: 15, flooring: 10, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '4 min', bikeEastBeach: '14 min', bikeArroyoBurro: '19 min', bikeAmtrak: '9 min', notes: 'Oak Park sweet spot. Carport + hardwood floors. Add to Saturday Bartlein key loop. Verify sq ft and bathroom layout.' },
-  { id: 3578, address: '3578 Modoc Road #8', manager: 'Bartlein', listingUrl: 'https://bartlein.com/rentals.html', zillowUrl: '', rent: 2775, neighborhood: 10, bathroom: 25, sqft: 25, parking: 20, hospital: 10, flooring: 5, storage: 10, amtrak: 10, laundry: 10, dishwasher: 5, driveHospital: '7 min', bikeEastBeach: '25 min', bikeArroyoBurro: '12 min', bikeAmtrak: '19 min', notes: 'SATURDAY KEY: The Space King. 800 sq ft verified, private garage, in-unit W/D. Assess carpet allergy situation.' },
-  { id: 2728, address: '2728 De La Vina St #2', manager: 'Sierra', listingUrl: 'https://sierrapropsb.com/residential/', zillowUrl: '', rent: 2600, neighborhood: 15, bathroom: -1, sqft: 0, parking: 20, hospital: 15, flooring: 10, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '4 min', bikeEastBeach: '18 min', bikeArroyoBurro: '15 min', bikeAmtrak: '10 min', notes: 'MORNING SCAN: San Roque/Oak Park border. Hardwood floors and assigned parking confirmed. Email Jovien to add to Friday tour!' },
-  { id: 31, address: '455 W. Gutierrez St', manager: 'Zillow', listingUrl: '', zillowUrl: '', rent: 2895, neighborhood: 25, bathroom: -1, sqft: 0, parking: 20, hospital: 10, flooring: 10, storage: 0, amtrak: 10, laundry: 10, dishwasher: 5, driveHospital: '6 min', bikeEastBeach: '10 min', bikeArroyoBurro: '18 min', bikeAmtrak: '4 min', notes: 'ZILLOW WILDCARD: Heavily remodeled! Hardwood, parking, and in-unit W/D. Elite train commute. Needs sqft & bathroom layout check.' },
-  { id: 11, address: '2508 Castillo St #3', manager: 'Bartlein', listingUrl: 'https://bartlein.com/rentals.html', zillowUrl: '', rent: 1650, neighborhood: 20, bathroom: -1, sqft: 15, parking: 20, hospital: 15, flooring: 10, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '3 min', bikeEastBeach: '15 min', bikeArroyoBurro: '18 min', bikeAmtrak: '8 min', notes: 'VALUE KING: Oak Park. Carport, hardwood floors, sub-5 min ride to hospital. High priority for Saturday key pickup.' },
-  { id: 30, address: '23 W. Mission St #B', manager: 'Bartlein', listingUrl: 'https://bartlein.com/rentals.html', zillowUrl: '', rent: 2900, neighborhood: 20, bathroom: -1, sqft: 0, parking: 20, hospital: 15, flooring: 10, storage: 0, amtrak: 10, laundry: 10, dishwasher: 0, driveHospital: '2 min', bikeEastBeach: '16 min', bikeArroyoBurro: '17 min', bikeAmtrak: '10 min', notes: 'SATURDAY KEY: Off-street parking CONFIRMED! W/D hookups (treating as in-unit capability). Has balcony & hardwood. Verify sq ft with DTAPE.' },
-  { id: 432, address: '432 W Valerio St', manager: 'Zillow', listingUrl: '', zillowUrl: '', rent: 2775, neighborhood: 25, bathroom: 0, sqft: 15, parking: 20, hospital: 15, flooring: 10, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '4 min', bikeEastBeach: '12 min', bikeArroyoBurro: '18 min', bikeAmtrak: '8 min', notes: 'ZILLOW INTEL: 625 sq ft confirmed. Pergo floors, off-street parking. PENALTY: Bathroom is inside the bedroom (0 hosting points).' },
-  { id: 2102, address: '2102 Bath St #12', manager: 'Meridian', listingUrl: 'https://www.meridiangrouprem.com/vacancies', zillowUrl: '', rent: 2550, neighborhood: 25, bathroom: -1, sqft: 0, parking: 20, hospital: 15, flooring: 5, storage: 0, amtrak: 10, laundry: 0, dishwasher: 0, driveHospital: '4 min', bikeEastBeach: '12 min', bikeArroyoBurro: '19 min', bikeAmtrak: '6 min', notes: 'FRIDAY TOUR: 4:00 PM appointment. Downtown, has carpet penalty. Verify layout and DTAPE the sq ft.' }
-];
+const MANUAL_DATA = [];
 
 const INITIAL_SCORING = {
   neighborhood: [
@@ -820,7 +810,7 @@ export default function App() {
                 On-Demand Scrape
             </button>
             <button onClick={handleFetchAllCommutes} disabled={isFetchingCommutes} className="text-sm font-medium text-slate-500 hover:text-indigo-600 flex items-center gap-2 transition-colors py-2.5 px-4 rounded-xl hover:bg-slate-100 disabled:opacity-50 disabled:cursor-wait">
-                {isFetchingCommutes ? <Loader2 size={16} className="animate-spin" /> : <Map size={16} />}
+                {isFetchingCommutes ? <Loader2 size={16} className="animate-spin" /> : <MapIcon size={16} />}
                 Fetch Commutes
             </button>
             { (localStorage.getItem('apartments') || localStorage.getItem('archivedApartments')) && (
