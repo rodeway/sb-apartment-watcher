@@ -589,75 +589,92 @@ export default function App() {
     setCommuteFetchDetails('Scanning for missing commute data...');
 
     setTimeout(() => {
-      const allApartments = [...apartments, ...archivedApartments];
-      const apartmentsToUpdate = allApartments.filter(
-        (apt) => !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
-      );
+      try {
+        const safeApts = Array.isArray(apartments) ? apartments : [];
+        const safeArchived = Array.isArray(archivedApartments) ? archivedApartments : [];
+        const allApartments = [...safeApts, ...safeArchived].filter(apt => apt && typeof apt === 'object');
 
-      if (apartmentsToUpdate.length === 0) {
-        setCommuteFetchStatus('✅ All apartments have complete commute data.');
-        setCommuteFetchProgress(100);
-        setCommuteFetchDetails('No changes needed.');
-        setTimeout(() => {
-          setIsFetchingCommutes(false);
-          isFetchingCommutesRef.current = false;
-        }, 3000);
-        return;
-      }
+        const apartmentsToUpdate = allApartments.filter(
+          (apt) => !apt.driveHospital || !apt.bikeEastBeach || !apt.bikeArroyoBurro || !apt.bikeAmtrak
+        );
 
-      const processApartmentAtIndex = async (index, updatesMap) => {
-        if (!isFetchingCommutesRef.current) {
-          console.log("Commute fetch was cancelled.");
-          return;
-        }
-
-        const progressPercent = Math.round((index / apartmentsToUpdate.length) * 100);
-        setCommuteFetchProgress(progressPercent);
-
-        if (index >= apartmentsToUpdate.length) {
-          setApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
-          setArchivedApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
-          setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
+        if (apartmentsToUpdate.length === 0) {
+          setCommuteFetchStatus('✅ All apartments have complete commute data.');
           setCommuteFetchProgress(100);
-          setCommuteFetchDetails('Applied new commute times to listings.');
+          setCommuteFetchDetails('No changes needed.');
           setTimeout(() => {
             setIsFetchingCommutes(false);
-            setCommuteFetchStatus('');
-            setCommuteFetchDetails('');
-            setCommuteFetchProgress(0);
             isFetchingCommutesRef.current = false;
-          }, 5000);
+          }, 3000);
           return;
         }
 
-        const apt = apartmentsToUpdate[index];
-        setCommuteFetchStatus(`Fetching for "${apt.address}"... (${index + 1} of ${apartmentsToUpdate.length})`);
-        setCommuteFetchDetails(`Retrieving times for Hospital, East Beach, Arroyo Burro, and Amtrak...`);
-
-        try {
-            const response = await fetch('/api/get-commute-times', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ address: apt.address }),
-            });
-            if (response.ok) {
-                const newTimes = await response.json();
-                updatesMap.set(apt.id, newTimes);
-                setCommuteFetchDetails(`Found times for "${apt.address}".`);
-            } else {
-                console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
-                setCommuteFetchDetails(`Failed to fetch for "${apt.address}".`);
+        const processApartmentAtIndex = async (index, updatesMap) => {
+          try {
+            if (!isFetchingCommutesRef.current) {
+              console.log("Commute fetch was cancelled.");
+              return;
             }
-        } catch (error) {
-            console.error(`Error fetching commute for ${apt.address}:`, error);
-            setCommuteFetchDetails(`Error fetching for "${apt.address}".`);
-        }
 
-        setTimeout(() => processApartmentAtIndex(index + 1, updatesMap), 50);
-      };
+            const progressPercent = Math.round((index / apartmentsToUpdate.length) * 100);
+            setCommuteFetchProgress(progressPercent);
 
-      processApartmentAtIndex(0, new Map());
-    }, 100); // A small delay to allow the UI to update to "Initializing..."
+            if (index >= apartmentsToUpdate.length) {
+              setApartments((prev) => Array.isArray(prev) ? prev.map((apt) => (apt && updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)) : prev);
+              setArchivedApartments((prev) => Array.isArray(prev) ? prev.map((apt) => (apt && updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)) : prev);
+              setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
+              setCommuteFetchProgress(100);
+              setCommuteFetchDetails('Applied new commute times to listings.');
+              setTimeout(() => {
+                setIsFetchingCommutes(false);
+                setCommuteFetchStatus('');
+                setCommuteFetchDetails('');
+                setCommuteFetchProgress(0);
+                isFetchingCommutesRef.current = false;
+              }, 5000);
+              return;
+            }
+
+            const apt = apartmentsToUpdate[index];
+            setCommuteFetchStatus(`Fetching for "${apt.address || 'Unknown'}"... (${index + 1} of ${apartmentsToUpdate.length})`);
+            setCommuteFetchDetails(`Retrieving times for Hospital, East Beach, Arroyo Burro, and Amtrak...`);
+
+            try {
+                const response = await fetch('/api/get-commute-times', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: apt.address }),
+                });
+                if (response.ok) {
+                    const newTimes = await response.json();
+                    updatesMap.set(apt.id, newTimes);
+                    setCommuteFetchDetails(`Found times for "${apt.address || 'Unknown'}".`);
+                } else {
+                    console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+                    setCommuteFetchDetails(`Failed: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error(`Error fetching commute for ${apt.address}:`, error);
+                setCommuteFetchDetails(`Error: ${error.message}`);
+            }
+
+            setTimeout(() => processApartmentAtIndex(index + 1, updatesMap), 100);
+          } catch (err) {
+            console.error("Error in processApartmentAtIndex:", err);
+            setCommuteFetchStatus('Error processing apartment.');
+            setCommuteFetchDetails(err.message);
+            isFetchingCommutesRef.current = false;
+          }
+        };
+
+        processApartmentAtIndex(0, new Map());
+      } catch (error) {
+        console.error("Error starting commute fetch:", error);
+        setCommuteFetchStatus('Failed to start fetch.');
+        setCommuteFetchDetails(error.message);
+        isFetchingCommutesRef.current = false;
+      }
+    }, 100); 
   };
 
   const cancelFetchCommutes = () => {
