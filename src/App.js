@@ -163,6 +163,8 @@ export default function App() {
   const isFetchingCommutesRef = useRef(false);
   const [isFetchingCommutes, setIsFetchingCommutes] = useState(false);
   const [commuteFetchStatus, setCommuteFetchStatus] = useState('');
+  const [commuteFetchProgress, setCommuteFetchProgress] = useState(0);
+  const [commuteFetchDetails, setCommuteFetchDetails] = useState('');
   const [newCategoryWeight, setNewCategoryWeight] = useState(5);
 
   // Effect to save active apartments to localStorage whenever they change
@@ -583,6 +585,8 @@ export default function App() {
     isFetchingCommutesRef.current = true;
     setIsFetchingCommutes(true);
     setCommuteFetchStatus('Initializing...');
+    setCommuteFetchProgress(0);
+    setCommuteFetchDetails('Scanning for missing commute data...');
 
     setTimeout(() => {
       const allApartments = [...apartments, ...archivedApartments];
@@ -592,6 +596,8 @@ export default function App() {
 
       if (apartmentsToUpdate.length === 0) {
         setCommuteFetchStatus('✅ All apartments have complete commute data.');
+        setCommuteFetchProgress(100);
+        setCommuteFetchDetails('No changes needed.');
         setTimeout(() => {
           setIsFetchingCommutes(false);
           isFetchingCommutesRef.current = false;
@@ -604,13 +610,21 @@ export default function App() {
           console.log("Commute fetch was cancelled.");
           return;
         }
+
+        const progressPercent = Math.round((index / apartmentsToUpdate.length) * 100);
+        setCommuteFetchProgress(progressPercent);
+
         if (index >= apartmentsToUpdate.length) {
           setApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
           setArchivedApartments((prev) => prev.map((apt) => (updatesMap.has(apt.id) ? { ...apt, ...updatesMap.get(apt.id) } : apt)));
           setCommuteFetchStatus(`✅ Done! Processed ${apartmentsToUpdate.length} apartments.`);
+          setCommuteFetchProgress(100);
+          setCommuteFetchDetails('Applied new commute times to listings.');
           setTimeout(() => {
             setIsFetchingCommutes(false);
             setCommuteFetchStatus('');
+            setCommuteFetchDetails('');
+            setCommuteFetchProgress(0);
             isFetchingCommutesRef.current = false;
           }, 5000);
           return;
@@ -618,6 +632,7 @@ export default function App() {
 
         const apt = apartmentsToUpdate[index];
         setCommuteFetchStatus(`Fetching for "${apt.address}"... (${index + 1} of ${apartmentsToUpdate.length})`);
+        setCommuteFetchDetails(`Retrieving times for Hospital, East Beach, Arroyo Burro, and Amtrak...`);
 
         try {
             const response = await fetch('/api/get-commute-times', {
@@ -628,11 +643,14 @@ export default function App() {
             if (response.ok) {
                 const newTimes = await response.json();
                 updatesMap.set(apt.id, newTimes);
+                setCommuteFetchDetails(`Found times for "${apt.address}".`);
             } else {
                 console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+                setCommuteFetchDetails(`Failed to fetch for "${apt.address}".`);
             }
         } catch (error) {
             console.error(`Error fetching commute for ${apt.address}:`, error);
+            setCommuteFetchDetails(`Error fetching for "${apt.address}".`);
         }
 
         setTimeout(() => processApartmentAtIndex(index + 1, updatesMap), 50);
@@ -646,6 +664,8 @@ export default function App() {
     isFetchingCommutesRef.current = false;
     setIsFetchingCommutes(false);
     setCommuteFetchStatus('Cancelled by user.');
+    setCommuteFetchDetails('');
+    setCommuteFetchProgress(0);
   };
 
   const handleTriggerScrape = async () => {
@@ -805,6 +825,12 @@ export default function App() {
                     <h2 className="text-xl font-bold mt-4">Fetching Commute Times</h2>
                     <p className="text-slate-600 mt-2 min-h-[20px]">
                         {commuteFetchStatus}
+                    </p>
+                    <div className="w-full bg-slate-200 rounded-full h-2 mt-4 overflow-hidden">
+                        <div className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${commuteFetchProgress}%` }}></div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-3 font-medium min-h-[16px]">
+                        {commuteFetchDetails}
                     </p>
                 </div>
             </div>
