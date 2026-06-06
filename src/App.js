@@ -635,16 +635,19 @@ export default function App() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ address: apt.address }),
                 });
+                console.log(`[Diagnostic] Response status for ${apt.address}:`, response.status);
                 if (response.ok) {
                     const newTimes = await response.json();
+                    console.log(`[Diagnostic] Data received for ${apt.address}:`, newTimes);
                     updatesMap.set(apt.id, newTimes);
                     setCommuteFetchDetails(`Found times for "${apt.address || 'Unknown'}".`);
                 } else {
-                    console.error(`Failed to fetch commute for ${apt.address}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error(`[Diagnostic] Failed to fetch commute for ${apt.address}: ${response.statusText} - ${errorText}`);
                     setCommuteFetchDetails(`Failed: ${response.statusText}`);
                 }
             } catch (error) {
-                console.error(`Error fetching commute for ${apt.address}:`, error);
+                console.error(`[Diagnostic] Network/JS error fetching commute for ${apt.address}:`, error);
                 setCommuteFetchDetails(`Error: ${error.message}`);
             }
 
