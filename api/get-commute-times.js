@@ -41,7 +41,9 @@ export default async function handler(request, response) {
   };
 
   try {
-    for (const [key, [destination, mode]] of Object.entries(destinations)) {
+    // Use Promise.all to run all four commute lookups in parallel. This is much faster
+    // than a sequential loop and provides better error details to the client.
+    const promises = Object.entries(destinations).map(async ([key, [destination, mode]]) => {
         writeLog(`Requesting ${mode} to ${destination}...`);
         const params = new URLSearchParams({ origin, destination, mode, key: apiKey });
         const res = await fetch(`${baseUrl}?${params}`);
@@ -50,19 +52,25 @@ export default async function handler(request, response) {
         if (data.status === "OK") {
             const duration = data.routes[0]?.legs[0]?.duration?.text;
             if (duration) {
-              commuteTimes[key] = duration.replace("mins", "min");
-              writeLog(`Success: ${key} = ${commuteTimes[key]}`);
+              writeLog(`Success: ${key} = ${duration}`);
+              return [key, duration.replace("mins", "min")];
             } else {
               writeLog(`Warning: Status OK but no duration found for ${key}.`);
+              return [key, 'N/A']; // Explicitly mark as not found
             }
         } else {
             writeLog(`Maps API Error for ${key}: ${data.status} - ${data.error_message || ''}`);
-            console.warn(`Maps API Warning for '${address}' to '${destination}': ${data.status}`);
+            // Return the specific error status from the Maps API (e.g., "ZERO_RESULTS").
+            // This provides much better debugging information on the frontend.
+            return [key, data.status];
         }
-        // Small delay to be a good API citizen
-        await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    writeLog(`Completed fetching for ${address}. Result: ${JSON.stringify(commuteTimes)}`);
+    });
+
+    // Wait for all lookups to complete and convert the [key, value] pairs back into an object.
+    const results = await Promise.all(promises);
+    const commuteTimes = Object.fromEntries(results);
+
+    writeLog(`Completed fetching for "${address}". Result: ${JSON.stringify(commuteTimes)}`);
     return response.status(200).json(commuteTimes);
   } catch (error) {
     writeLog(`Exception during fetch: ${error.message}`);
