@@ -47,8 +47,16 @@ def send_discord_alert(message):
 
 def get_commute_times(address, api_key):
     """Fetches commute times from Google Maps Directions API."""
+    if not isinstance(address, str) or not address.strip():
+        print(f"Warning: Invalid address provided for commute time lookup: {address}")
+        return {}
+
+    # Sanitize the address to remove unit numbers, which can confuse the Maps API.
+    sanitized_address = address.split(',')[0].split('#')[0].strip()
+    print(f"Sanitizing address for Maps API: '{address}' -> '{sanitized_address}'")
+
     base_url = "https://maps.googleapis.com/maps/api/directions/json"
-    origin = f"{address}, Santa Barbara, CA"
+    origin = f"{sanitized_address}, Santa Barbara, CA"
     commute_times = {
         "driveHospital": "", "bikeEastBeach": "", "bikeArroyoBurro": "", "bikeAmtrak": ""
     }

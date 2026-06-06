@@ -20,9 +20,9 @@ export default async function handler(request, response) {
 
   writeLog(`=== Fetching for address: ${address} ===`);
 
-  if (!address) {
-    writeLog(`Error: Address is required.`);
-    return response.status(400).json({ message: 'Address is required.' });
+  if (!address || typeof address !== 'string' || address.trim() === '') {
+    writeLog(`Error: Address is required and must be a non-empty string. Received: ${address}`);
+    return response.status(400).json({ message: 'Address is required and must be a non-empty string.' });
   }
   if (!apiKey) {
     writeLog(`Error: MAPS_API_KEY is not set in the environment variables.`);
