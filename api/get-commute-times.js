@@ -1,14 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-
 export default async function handler(request, response) {
-  const logFile = path.join(process.cwd(), 'commute-diagnostic-log.txt');
   const writeLog = (msg) => {
-    try {
-      fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
-    } catch (e) {
-      console.error("Failed to write to log file", e);
-    }
+    // In a serverless environment like Vercel, writing to files is not reliable.
+    // We use console.log, which will be captured by Vercel's logging service.
+    console.log(`[COMMUTE_LOG] ${msg}`);
   };
 
   if (request.method !== 'POST') {
