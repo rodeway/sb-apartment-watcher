@@ -29,8 +29,13 @@ export default async function handler(request, response) {
     return response.status(500).json({ message: 'Server configuration error: MAPS_API_KEY is not set.' });
   }
 
+  // Sanitize the address to remove unit numbers, which can confuse the Maps API.
+  // This helps prevent "NOT_FOUND" or "ZERO_RESULTS" errors.
+  const sanitizedAddress = address.split(',')[0].split('#')[0].trim();
+  writeLog(`Sanitized address from "${address}" to "${sanitizedAddress}"`);
+
   const baseUrl = "https://maps.googleapis.com/maps/api/directions/json";
-  const origin = `${address}, Santa Barbara, CA`;
+  const origin = `${sanitizedAddress}, Santa Barbara, CA`;
   const commuteTimes = {
       driveHospital: "", bikeEastBeach: "", bikeArroyoBurro: "", bikeAmtrak: ""
   };
