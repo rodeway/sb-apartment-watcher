@@ -5,9 +5,18 @@ export default async function handler(request, response) {
     return response.status(405).json({ message: 'Method Not Allowed' });
   }
 
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!redisUrl || !redisToken) {
+    const errorMessage = 'Server configuration error: Upstash Redis URL or Token is not set. Please check Vercel environment variables.';
+    console.error(errorMessage);
+    return response.status(500).json({ message: errorMessage });
+  }
+
   const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    url: redisUrl,
+    token: redisToken,
   });
 
   try {
