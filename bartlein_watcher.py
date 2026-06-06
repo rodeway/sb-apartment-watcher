@@ -5,6 +5,7 @@ from pypdf import PdfReader
 import time
 import json
 from bs4 import BeautifulSoup
+import concurrent.futures
 import google.generativeai as genai
 
 # The default URL to scrape. This can be overridden by the SCRAPE_URL environment variable.
@@ -46,7 +47,7 @@ def send_discord_alert(message):
         print(f"Failed to send Discord alert: {e}")
 
 def get_commute_times(address, api_key):
-    """Fetches commute times from Google Maps Directions API."""
+    """Fetches commute times from Google Maps Directions API in parallel."""
     if not isinstance(address, str) or not address.strip():
         print(f"Warning: Invalid address provided for commute time lookup: {address}")
         return {}
@@ -57,35 +58,39 @@ def get_commute_times(address, api_key):
 
     base_url = "https://maps.googleapis.com/maps/api/directions/json"
     origin = f"{sanitized_address}, Santa Barbara, CA"
-    commute_times = {
-        "driveHospital": "", "bikeEastBeach": "", "bikeArroyoBurro": "", "bikeAmtrak": ""
-    }
     destinations = {
         "driveHospital": ("Santa Barbara Cottage Hospital", "driving"),
         "bikeEastBeach": ("East Beach, Santa Barbara, CA", "bicycling"),
         "bikeArroyoBurro": ("Arroyo Burro Beach County Park", "bicycling"),
         "bikeAmtrak": ("Santa Barbara Amtrak Station", "bicycling"),
     }
-
-    for key, (destination, mode) in destinations.items():
-        params = {
-            "origin": origin,
-            "destination": destination,
-            "mode": mode,
-            "key": api_key
-        }
+    
+    def fetch_duration(session, key, destination, mode):
+        """Inner function to fetch a single route's duration."""
+        params = {"origin": origin, "destination": destination, "mode": mode, "key": api_key}
         try:
-            response = requests.get(base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            if data["status"] == "OK":
-                duration = data["routes"][0]["legs"][0]["duration"]["text"]
-                commute_times[key] = duration.replace("mins", "min")
-            else:
-                print(f"Maps API Warning for '{address}' to '{destination}': {data['status']}")
-            time.sleep(0.2) # Be a good citizen and avoid hitting API rate limits
+            with session.get(base_url, params=params) as response:
+                response.raise_for_status()
+                data = response.json()
+                if data.get("status") == "OK":
+                    duration = data["routes"][0]["legs"][0]["duration"]["text"]
+                    return key, duration.replace("mins", "min")
+                else:
+                    print(f"Maps API Warning for '{address}' to '{destination}': {data.get('status')}")
         except Exception as e:
             print(f"Error fetching directions for '{address}': {e}")
+        return key, ""
+
+    commute_times = {}
+    # Use a ThreadPoolExecutor to run the network requests in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(destinations)) as executor:
+        with requests.Session() as session:
+            # Schedule the execution of each API call
+            future_to_key = {executor.submit(fetch_duration, session, key, dest, mode): key for key, (dest, mode) in destinations.items()}
+            for future in concurrent.futures.as_completed(future_to_key):
+                key, duration = future.result()
+                commute_times[key] = duration
+
     return commute_times
 
 def _extract_text_from_pdf(pdf_content):
