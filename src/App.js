@@ -629,11 +629,15 @@ export default function App() {
             setCommuteFetchStatus(`Fetching for "${apt.address || 'Unknown'}"... (${index + 1} of ${apartmentsToUpdate.length})`);
             setCommuteFetchDetails(`Retrieving times for Hospital, East Beach, Arroyo Burro, and Amtrak...`);
 
+            // Sanitize the address to remove unit numbers, which can confuse the Maps API.
+            // This mirrors the logic in the Python scraper for consistency.
+            const addressToFetch = apt.address ? apt.address.split(',')[0].split('#')[0].trim() : '';
+
             try {
                 const response = await fetch('/api/get-commute-times', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address: apt.address }),
+                    body: JSON.stringify({ address: addressToFetch }),
                 });
                 console.log(`[Diagnostic] Response status for ${apt.address}:`, response.status);
                 if (response.ok) {
