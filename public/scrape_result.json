@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-06-16T18:55:56Z",
+  "timestamp": "2026-06-18T18:06:57Z",
   "added_units": [
-    {
-      "address": "910 Bath St, Unit A"
-    },
     {
       "address": "3930 Via Lucero, Unit 26"
     },
     {
       "address": "311 Ellwood Beach Dr, Unit 12"
+    },
+    {
+      "address": "1219 De La Vina St., Unit 1"
     }
   ]
 }
