@@ -1,6 +1,9 @@
 {
-  "timestamp": "2026-06-19T17:21:38Z",
+  "timestamp": "2026-06-20T16:22:44Z",
   "added_units": [
+    {
+      "address": "1448 Lou Dillon Lane, Unit B"
+    },
     {
       "address": "3930 Via Lucero, Unit 26"
     },
@@ -9,6 +12,9 @@
     },
     {
       "address": "1219 De La Vina St., Unit 1"
+    },
+    {
+      "address": "5392 Hollister Avenue, Unit 1"
     }
   ]
 }
