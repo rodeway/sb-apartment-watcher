@@ -1,9 +1,9 @@
 name: Morning Apartment Scrape
 
 on:
-  schedule:
-    # Runs at 15:00 UTC every day, which is 8:00 AM PDT (Los Angeles time)
-    - cron: '0 15 * * *'
+  # schedule:
+  #   # Runs at 15:00 UTC every day, which is 8:00 AM PDT (Los Angeles time)
+  #   - cron: '0 15 * * *'
   workflow_dispatch:
     inputs:
       scrape_url:
