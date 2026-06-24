@@ -1,29 +1,20 @@
 {
-  "timestamp": "2026-06-08T21:29:24Z",
+  "timestamp": "2026-06-22T18:52:44Z",
   "added_units": [
     {
-      "address": "910 Bath St, Unit A"
+      "address": "1448 Lou Dillon Lane, Unit B"
     },
     {
-      "address": "1323 Olive Street, Unit D"
-    },
-    {
-      "address": "1019 E Haley St, Unit C2"
-    },
-    {
-      "address": "1323 Olive Street, Unit B"
-    },
-    {
-      "address": "412 W. Padre Street, Unit F"
-    },
-    {
-      "address": "48 Broadmoor Plaza, Unit 8"
+      "address": "3930 Via Lucero, Unit 26"
     },
     {
       "address": "311 Ellwood Beach Dr, Unit 12"
     },
     {
       "address": "1219 De La Vina St., Unit 1"
+    },
+    {
+      "address": "5392 Hollister Avenue, Unit 1"
     }
   ]
 }
